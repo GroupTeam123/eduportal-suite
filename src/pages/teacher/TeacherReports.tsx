@@ -5,8 +5,11 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { mockStudents, mockReports } from '@/data/mockData';
-import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Eye } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { useReports } from '@/hooks/useReports';
+import { useStudents } from '@/hooks/useStudents';
+import { useAuth } from '@/contexts/AuthContext';
+import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Eye, Loader2, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, LineChart as RechartsLine, Line } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 
@@ -17,7 +20,6 @@ const chartOptions = [
   { id: 'comparison', label: 'Subject Comparison', icon: TrendingUp },
 ];
 
-const attendanceData = mockStudents.map(s => ({ name: s.name.split(' ')[0], attendance: s.attendance }));
 const gradeData = [
   { name: 'A+', value: 15, color: 'hsl(142, 76%, 36%)' },
   { name: 'A', value: 25, color: 'hsl(199, 89%, 48%)' },
@@ -25,6 +27,7 @@ const gradeData = [
   { name: 'B', value: 20, color: 'hsl(38, 92%, 50%)' },
   { name: 'C', value: 10, color: 'hsl(0, 84%, 60%)' },
 ];
+
 const performanceData = [
   { month: 'Aug', score: 72 },
   { month: 'Sep', score: 75 },
@@ -35,11 +38,21 @@ const performanceData = [
 ];
 
 export default function TeacherReports() {
+  const { supabaseUser, user, departmentId } = useAuth();
+  const { reports, loading, createReport, submitReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
+  const { students } = useStudents(departmentId);
+  
   const [selectedCharts, setSelectedCharts] = useState<string[]>(['attendance', 'grades']);
   const [reportTitle, setReportTitle] = useState('');
+  const [reportContent, setReportContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [previewMode, setPreviewMode] = useState(false);
   const { toast } = useToast();
+
+  // Generate attendance data from actual students
+  const attendanceData = students.slice(0, 8).map(s => ({ 
+    name: s.name.split(' ')[0].substring(0, 6), 
+    attendance: s.attendance || 0 
+  }));
 
   const toggleChart = (chartId: string) => {
     setSelectedCharts(prev => 
@@ -49,7 +62,7 @@ export default function TeacherReports() {
     );
   };
 
-  const handleGenerateReport = () => {
+  const handleGenerateReport = async () => {
     if (!reportTitle) {
       toast({
         title: 'Title Required',
@@ -68,13 +81,31 @@ export default function TeacherReports() {
     }
     
     setIsGenerating(true);
-    setTimeout(() => {
-      setIsGenerating(false);
-      toast({
-        title: 'Report Generated',
-        description: 'Your report is ready for download.',
-      });
-    }, 2000);
+    
+    const chartData = {
+      selectedCharts,
+      attendanceData,
+      gradeData,
+      performanceData,
+      generatedAt: new Date().toISOString(),
+    };
+
+    const result = await createReport({
+      title: reportTitle,
+      content: reportContent,
+      chart_data: chartData,
+    });
+
+    setIsGenerating(false);
+    
+    if (result) {
+      setReportTitle('');
+      setReportContent('');
+    }
+  };
+
+  const handleSubmitToHOD = async (reportId: string) => {
+    await submitReport(reportId, 'hod');
   };
 
   const handleDownloadPDF = () => {
@@ -82,7 +113,18 @@ export default function TeacherReports() {
       title: 'Downloading PDF',
       description: 'Your report is being downloaded...',
     });
+    // In production, you'd generate a real PDF here
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Report Generation" subtitle="Loading...">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout title="Report Generation" subtitle="Create customized reports with data visualization">
@@ -100,6 +142,17 @@ export default function TeacherReports() {
                   placeholder="e.g., Q1 Performance Report"
                   value={reportTitle}
                   onChange={(e) => setReportTitle(e.target.value)}
+                  className="mt-1.5"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="content">Report Description</Label>
+                <Textarea
+                  id="content"
+                  placeholder="Add notes or description for this report..."
+                  value={reportContent}
+                  onChange={(e) => setReportContent(e.target.value)}
                   className="mt-1.5"
                 />
               </div>
@@ -132,38 +185,55 @@ export default function TeacherReports() {
               >
                 {isGenerating ? (
                   <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Generating...
                   </span>
                 ) : (
                   <>
                     <FileText className="w-4 h-4 mr-2" />
-                    Generate Report
+                    Save Report
                   </>
                 )}
-              </Button>
-              <Button variant="outline" className="w-full" onClick={() => setPreviewMode(!previewMode)}>
-                <Eye className="w-4 h-4 mr-2" />
-                {previewMode ? 'Hide Preview' : 'Preview Report'}
               </Button>
             </div>
           </Card>
 
           {/* Recent Reports */}
           <Card className="p-6">
-            <h3 className="font-display text-lg font-semibold mb-4">Recent Reports</h3>
+            <h3 className="font-display text-lg font-semibold mb-4">My Reports</h3>
             <div className="space-y-3">
-              {mockReports.map((report) => (
-                <div key={report.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{report.title}</p>
-                    <p className="text-xs text-muted-foreground">{report.createdAt}</p>
+              {reports.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No reports created yet</p>
+              ) : (
+                reports.slice(0, 5).map((report) => (
+                  <div key={report.id} className="p-3 bg-muted/30 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{report.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(report.created_at).toLocaleDateString()} • 
+                          <span className={`ml-1 ${
+                            report.status === 'draft' ? 'text-warning' :
+                            report.status === 'approved' ? 'text-success' : 'text-primary'
+                          }`}>
+                            {report.status.replace(/_/g, ' ')}
+                          </span>
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {report.status === 'draft' && (
+                          <Button variant="ghost" size="icon" onClick={() => handleSubmitToHOD(report.id)} title="Submit to HOD">
+                            <Send className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" onClick={handleDownloadPDF}>
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={handleDownloadPDF}>
-                    <Download className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </Card>
         </div>
@@ -186,7 +256,7 @@ export default function TeacherReports() {
                 <div className="bg-muted/30 rounded-lg p-4">
                   <h4 className="font-medium mb-4">Attendance Analysis</h4>
                   <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={attendanceData}>
+                    <BarChart data={attendanceData.length > 0 ? attendanceData : [{ name: 'No data', attendance: 0 }]}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} />
                       <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />

@@ -5,59 +5,79 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { mockDocuments } from '@/data/mockData';
-import { Document } from '@/types';
-import { Upload, Trash2, FileText, Download, Save, User } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useDocuments } from '@/hooks/useDocuments';
+import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/contexts/AuthContext';
+import { Upload, Trash2, FileText, Download, Save, User, Loader2 } from 'lucide-react';
 
 export default function TeacherProfile() {
-  const { user } = useAuth();
-  const [documents, setDocuments] = useState<Document[]>(mockDocuments);
+  const { user, supabaseUser, departmentId } = useAuth();
+  const { profile, loading: profileLoading, updateProfile } = useProfile(supabaseUser?.id || null);
+  const { documents, loading: docsLoading, uploadDocument, deleteDocument, getDownloadUrl } = useDocuments(supabaseUser?.id || null, departmentId);
+  
   const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    department: user?.department || '',
-    phone: '+1 (555) 123-4567',
-    bio: 'Experienced educator with a passion for technology and student success. Specializing in Data Structures, Algorithms, and Software Engineering.',
-    qualification: 'Ph.D. in Computer Science',
-    experience: '12 years',
+    full_name: profile?.full_name || user?.name || '',
+    email: profile?.email || user?.email || '',
+    phone: profile?.phone || '',
+    bio: profile?.bio || '',
   });
-  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Update form when profile loads
+  useState(() => {
+    if (profile) {
+      setFormData({
+        full_name: profile.full_name,
+        email: profile.email || '',
+        phone: profile.phone || '',
+        bio: profile.bio || '',
+      });
+    }
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const newDoc: Document = {
-        id: String(Date.now()),
-        name: file.name,
-        type: file.type.split('/')[1].toUpperCase(),
-        size: `${(file.size / 1024).toFixed(0)} KB`,
-        uploadedAt: new Date().toISOString().split('T')[0],
-        uploadedBy: user?.name || 'Unknown',
-      };
-      setDocuments([newDoc, ...documents]);
-      toast({
-        title: 'Document Uploaded',
-        description: `${file.name} has been uploaded successfully.`,
-      });
+      await uploadDocument(file, 'Personal document');
     }
   };
 
-  const handleDeleteDocument = (doc: Document) => {
-    setDocuments(documents.filter(d => d.id !== doc.id));
-    toast({
-      title: 'Document Deleted',
-      description: `${doc.name} has been removed.`,
-    });
+  const handleDeleteDocument = async (docId: string) => {
+    const doc = documents.find(d => d.id === docId);
+    if (doc) {
+      await deleteDocument(doc);
+    }
   };
 
-  const handleSaveProfile = () => {
-    toast({
-      title: 'Profile Updated',
-      description: 'Your profile information has been saved.',
-    });
+  const handleDownload = async (storagePath: string) => {
+    const url = await getDownloadUrl(storagePath);
+    if (url) {
+      window.open(url, '_blank');
+    }
   };
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    await updateProfile(formData);
+    setIsSaving(false);
+  };
+
+  const formatFileSize = (bytes: number | null) => {
+    if (!bytes) return 'Unknown size';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  if (profileLoading) {
+    return (
+      <DashboardLayout title="About Me" subtitle="Loading...">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout title="About Me" subtitle="Manage your personal information and documents">
@@ -67,14 +87,14 @@ export default function TeacherProfile() {
           <Card className="p-6 text-center">
             <div className="w-24 h-24 rounded-full bg-gradient-primary mx-auto mb-4 flex items-center justify-center">
               <span className="text-3xl font-bold text-primary-foreground">
-                {formData.name.split(' ').map(n => n[0]).join('')}
+                {(formData.full_name || 'U').split(' ').map(n => n[0]).join('')}
               </span>
             </div>
-            <h2 className="font-display text-xl font-bold">{formData.name}</h2>
-            <p className="text-muted-foreground">{formData.department}</p>
+            <h2 className="font-display text-xl font-bold">{formData.full_name || 'User'}</h2>
+            <p className="text-muted-foreground">{user?.department || 'No department'}</p>
             <div className="mt-4 space-y-2 text-sm">
-              <p><span className="text-muted-foreground">Qualification:</span> {formData.qualification}</p>
-              <p><span className="text-muted-foreground">Experience:</span> {formData.experience}</p>
+              <p><span className="text-muted-foreground">Role:</span> {user?.role || 'Teacher'}</p>
+              <p><span className="text-muted-foreground">Email:</span> {formData.email}</p>
             </div>
           </Card>
         </div>
@@ -89,11 +109,11 @@ export default function TeacherProfile() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="full_name">Full Name</Label>
                 <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  id="full_name"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   className="mt-1.5"
                 />
               </div>
@@ -120,27 +140,9 @@ export default function TeacherProfile() {
                 <Label htmlFor="department">Department</Label>
                 <Input
                   id="department"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="qualification">Qualification</Label>
-                <Input
-                  id="qualification"
-                  value={formData.qualification}
-                  onChange={(e) => setFormData({ ...formData, qualification: e.target.value })}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="experience">Experience</Label>
-                <Input
-                  id="experience"
-                  value={formData.experience}
-                  onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                  className="mt-1.5"
+                  value={user?.department || 'Not assigned'}
+                  disabled
+                  className="mt-1.5 bg-muted"
                 />
               </div>
             </div>
@@ -152,12 +154,22 @@ export default function TeacherProfile() {
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                 className="mt-1.5 min-h-[100px]"
+                placeholder="Tell us about yourself..."
               />
             </div>
 
-            <Button onClick={handleSaveProfile} className="mt-6">
-              <Save className="w-4 h-4 mr-2" />
-              Save Changes
+            <Button onClick={handleSaveProfile} className="mt-6" disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </>
+              )}
             </Button>
           </Card>
 
@@ -184,32 +196,40 @@ export default function TeacherProfile() {
               </Label>
             </div>
 
-            <div className="space-y-3">
-              {documents.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-primary" />
+            {docsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{doc.file_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatFileSize(doc.file_size)} • {new Date(doc.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{doc.name}</p>
-                      <p className="text-sm text-muted-foreground">{doc.size} • {doc.uploadedAt}</p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleDownload(doc.storage_path)}>
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteDocument(doc.id)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteDocument(doc)} className="text-destructive hover:text-destructive">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {documents.length === 0 && (
-                <p className="text-center py-8 text-muted-foreground">No documents uploaded yet</p>
-              )}
-            </div>
+                ))}
+                {documents.length === 0 && (
+                  <p className="text-center py-8 text-muted-foreground">No documents uploaded yet</p>
+                )}
+              </div>
+            )}
           </Card>
         </div>
       </div>
