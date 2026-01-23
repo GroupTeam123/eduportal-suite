@@ -14,6 +14,216 @@ export type Database = {
   }
   public: {
     Tables: {
+      departments: {
+        Row: {
+          created_at: string
+          description: string | null
+          hod_user_id: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          hod_user_id?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          hod_user_id?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      documents: {
+        Row: {
+          created_at: string
+          department_id: string | null
+          description: string | null
+          file_name: string
+          file_size: number | null
+          file_type: string | null
+          id: string
+          storage_path: string
+          uploader_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          file_name: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          storage_path: string
+          uploader_user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          file_name?: string
+          file_size?: number | null
+          file_type?: string | null
+          id?: string
+          storage_path?: string
+          uploader_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          email?: string | null
+          full_name: string
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          chart_data: Json | null
+          content: string | null
+          created_at: string
+          department_id: string | null
+          id: string
+          reporter_role: Database["public"]["Enums"]["app_role"]
+          reporter_user_id: string
+          status: Database["public"]["Enums"]["report_status"]
+          submitted_to_user_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          chart_data?: Json | null
+          content?: string | null
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          reporter_role: Database["public"]["Enums"]["app_role"]
+          reporter_user_id: string
+          status?: Database["public"]["Enums"]["report_status"]
+          submitted_to_user_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          chart_data?: Json | null
+          content?: string | null
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          reporter_role?: Database["public"]["Enums"]["app_role"]
+          reporter_user_id?: string
+          status?: Database["public"]["Enums"]["report_status"]
+          submitted_to_user_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      student_records: {
+        Row: {
+          attendance: number | null
+          contact: number | null
+          created_at: string
+          department_id: string
+          email: string | null
+          guardian_name: string | null
+          guardian_phone: string | null
+          id: string
+          name: string
+          notes: string | null
+          teacher_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          attendance?: number | null
+          contact?: number | null
+          created_at?: string
+          department_id: string
+          email?: string | null
+          guardian_name?: string | null
+          guardian_phone?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          teacher_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          attendance?: number | null
+          contact?: number | null
+          created_at?: string
+          department_id?: string
+          email?: string | null
+          guardian_name?: string | null
+          guardian_phone?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          teacher_user_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_records_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           attendance: number | null
@@ -38,15 +248,85 @@ export type Database = {
         }
         Relationships: []
       }
+      teacher_assignments: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          teacher_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          teacher_user_id: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          teacher_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teacher_assignments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_access_department: {
+        Args: { _department_id: string; _user_id: string }
+        Returns: boolean
+      }
+      get_hod_department: { Args: { _user_id: string }; Returns: string }
+      get_user_department: { Args: { _user_id: string }; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_hod: { Args: { _user_id: string }; Returns: boolean }
+      is_principal: { Args: { _user_id: string }; Returns: boolean }
+      is_teacher: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "teacher" | "hod" | "principal"
+      report_status:
+        | "draft"
+        | "submitted_to_hod"
+        | "submitted_to_principal"
+        | "approved"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -173,6 +453,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["teacher", "hod", "principal"],
+      report_status: [
+        "draft",
+        "submitted_to_hod",
+        "submitted_to_principal",
+        "approved",
+      ],
+    },
   },
 } as const
