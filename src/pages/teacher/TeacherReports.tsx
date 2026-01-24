@@ -6,12 +6,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useReports } from '@/hooks/useReports';
+import { useReports, ReportRecord } from '@/hooks/useReports';
 import { useStudents } from '@/hooks/useStudents';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Eye, Loader2, Send } from 'lucide-react';
+import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Loader2, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, LineChart as RechartsLine, Line } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
+import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
 
 const chartOptions = [
   { id: 'attendance', label: 'Attendance Analysis', icon: BarChart3 },
@@ -108,12 +109,90 @@ export default function TeacherReports() {
     await submitReport(reportId, 'hod');
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = (report?: ReportRecord) => {
+    // Calculate summary from students
+    const totalStudents = students.length;
+    const avgAttendance = students.length > 0 
+      ? students.reduce((sum, s) => sum + (s.attendance || 0), 0) / students.length 
+      : 0;
+    const highPerformers = students.filter(s => (s.attendance || 0) >= 90).length;
+    const lowAttendance = students.filter(s => (s.attendance || 0) < 75).length;
+
+    // Use report data if provided, otherwise use current preview
+    const chartData = report?.chart_data as Record<string, unknown> | null;
+    const selectedChartsToUse = chartData?.selectedCharts as string[] || selectedCharts;
+    
+    const reportData: ReportData = {
+      title: report?.title || reportTitle || 'Annual Report',
+      content: report?.content || reportContent || undefined,
+      generatedBy: user?.name || 'Teacher',
+      department: undefined,
+      date: new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      }),
+      charts: {
+        attendance: selectedChartsToUse.includes('attendance') ? attendanceData : undefined,
+        grades: selectedChartsToUse.includes('grades') ? gradeData.map(g => ({
+          ...g,
+          color: g.color.startsWith('hsl') ? hslToHex(g.color) : g.color,
+        })) : undefined,
+        performance: selectedChartsToUse.includes('performance') ? performanceData : undefined,
+        comparison: selectedChartsToUse.includes('comparison') ? [
+          { subject: 'DSA', avg: 82 },
+          { subject: 'OS', avg: 78 },
+          { subject: 'DBMS', avg: 85 },
+          { subject: 'Networks', avg: 80 },
+        ] : undefined,
+      },
+      students: students.slice(0, 30).map(s => ({
+        name: s.name,
+        email: s.email || undefined,
+        attendance: s.attendance || undefined,
+        guardian_name: s.guardian_name || undefined,
+      })),
+      summary: {
+        totalStudents,
+        avgAttendance,
+        highPerformers,
+        lowAttendance,
+      },
+    };
+
+    generateAnnualReportPDF(reportData);
+    
     toast({
-      title: 'Downloading PDF',
-      description: 'Your report is being downloaded...',
+      title: 'PDF Downloaded',
+      description: 'Your report has been saved.',
     });
-    // In production, you'd generate a real PDF here
+  };
+
+  // Helper function to convert HSL to Hex
+  const hslToHex = (hsl: string): string => {
+    const match = hsl.match(/hsl\((\d+),\s*(\d+)%?,\s*(\d+)%?\)/);
+    if (!match) return '#6b7280';
+    
+    const h = parseInt(match[1]) / 360;
+    const s = parseInt(match[2]) / 100;
+    const l = parseInt(match[3]) / 100;
+    
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+    const g = Math.round(hue2rgb(p, q, h) * 255);
+    const b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+    
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   };
 
   if (loading) {
@@ -226,7 +305,7 @@ export default function TeacherReports() {
                             <Send className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" onClick={handleDownloadPDF}>
+                        <Button variant="ghost" size="icon" onClick={() => handleDownloadPDF(report)}>
                           <Download className="w-4 h-4" />
                         </Button>
                       </div>
@@ -245,7 +324,7 @@ export default function TeacherReports() {
               <h3 className="font-display text-lg font-semibold">
                 {reportTitle || 'Report Preview'}
               </h3>
-              <Button variant="outline" size="sm" onClick={handleDownloadPDF}>
+              <Button variant="outline" size="sm" onClick={() => handleDownloadPDF()}>
                 <Download className="w-4 h-4 mr-2" />
                 Download PDF
               </Button>
