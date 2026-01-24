@@ -224,30 +224,6 @@ export type Database = {
           },
         ]
       }
-      students: {
-        Row: {
-          attendance: number | null
-          contact: number | null
-          Email: string | null
-          Name: string
-          Stu_id: string
-        }
-        Insert: {
-          attendance?: number | null
-          contact?: number | null
-          Email?: string | null
-          Name: string
-          Stu_id: string
-        }
-        Update: {
-          attendance?: number | null
-          contact?: number | null
-          Email?: string | null
-          Name?: string
-          Stu_id?: string
-        }
-        Relationships: []
-      }
       teacher_assignments: {
         Row: {
           created_at: string
