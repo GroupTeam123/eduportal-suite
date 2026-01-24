@@ -5,59 +5,84 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { mockDocuments } from '@/data/mockData';
-import { Document } from '@/types';
-import { Upload, Trash2, FileText, Download, Save, User } from 'lucide-react';
+import { useDocuments } from '@/hooks/useDocuments';
+import { Upload, Trash2, FileText, Download, Save, User, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function HODProfile() {
-  const { user } = useAuth();
-  const [documents, setDocuments] = useState<Document[]>(mockDocuments.slice(0, 3));
+  const { user, supabaseUser, departmentId } = useAuth();
+  const { profile, updateProfile, loading: profileLoading } = useProfile(supabaseUser?.id || null);
+  const { documents, loading: docsLoading, uploadDocument, deleteDocument, getDownloadUrl } = useDocuments(supabaseUser?.id || null, departmentId);
+  
   const [formData, setFormData] = useState({
-    name: user?.name || 'Prof. Michael Chen',
-    email: user?.email || 'michael.chen@institute.edu',
-    department: user?.department || 'Computer Science',
-    phone: '+1 (555) 234-5678',
-    bio: 'Head of Computer Science Department with 15 years of academic and administrative experience. Leading research initiatives in AI and Machine Learning.',
-    qualification: 'Ph.D. in Computer Science, M.Tech',
-    experience: '15 years',
-    achievements: 'Best Department Award 2023, Published 45+ research papers',
+    name: '',
+    email: '',
+    department: user?.department || '',
+    phone: '',
+    bio: '',
+    qualification: '',
+    experience: '',
+    achievements: '',
   });
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Sync form data with profile when loaded
+  useState(() => {
+    if (profile) {
+      setFormData(prev => ({
+        ...prev,
+        name: profile.full_name || '',
+        email: profile.email || '',
+        phone: profile.phone || '',
+        bio: profile.bio || '',
+      }));
+    }
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const newDoc: Document = {
-        id: String(Date.now()),
-        name: file.name,
-        type: file.type.split('/')[1].toUpperCase(),
-        size: `${(file.size / 1024).toFixed(0)} KB`,
-        uploadedAt: new Date().toISOString().split('T')[0],
-        uploadedBy: user?.name || 'Unknown',
-      };
-      setDocuments([newDoc, ...documents]);
-      toast({
-        title: 'Document Uploaded',
-        description: `${file.name} has been uploaded successfully.`,
-      });
+      setIsUploading(true);
+      await uploadDocument(file);
+      setIsUploading(false);
+      e.target.value = ''; // Reset input
     }
   };
 
-  const handleDeleteDocument = (doc: Document) => {
-    setDocuments(documents.filter(d => d.id !== doc.id));
-    toast({
-      title: 'Document Deleted',
-      description: `${doc.name} has been removed.`,
+  const handleDeleteDocument = async (doc: typeof documents[0]) => {
+    await deleteDocument(doc);
+  };
+
+  const handleDownload = async (doc: typeof documents[0]) => {
+    const url = await getDownloadUrl(doc.storage_path);
+    if (url) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.file_name;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    await updateProfile({
+      full_name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      bio: formData.bio,
     });
   };
 
-  const handleSaveProfile = () => {
-    toast({
-      title: 'Profile Updated',
-      description: 'Your profile information has been saved.',
-    });
+  const formatFileSize = (bytes: number | null) => {
+    if (!bytes) return 'Unknown';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
@@ -68,15 +93,15 @@ export default function HODProfile() {
           <Card className="p-6 text-center">
             <div className="w-24 h-24 rounded-full bg-gradient-secondary mx-auto mb-4 flex items-center justify-center">
               <span className="text-3xl font-bold text-secondary-foreground">
-                {formData.name.split(' ').map(n => n[0]).join('')}
+                {(profile?.full_name || formData.name || 'HOD').split(' ').map(n => n[0]).join('')}
               </span>
             </div>
-            <h2 className="font-display text-xl font-bold">{formData.name}</h2>
+            <h2 className="font-display text-xl font-bold">{profile?.full_name || formData.name}</h2>
             <p className="text-primary font-medium">Head of Department</p>
-            <p className="text-muted-foreground">{formData.department}</p>
+            <p className="text-muted-foreground">{user?.department || formData.department}</p>
             <div className="mt-4 space-y-2 text-sm">
-              <p><span className="text-muted-foreground">Qualification:</span> {formData.qualification}</p>
-              <p><span className="text-muted-foreground">Experience:</span> {formData.experience}</p>
+              <p><span className="text-muted-foreground">Email:</span> {profile?.email || formData.email}</p>
+              {formData.phone && <p><span className="text-muted-foreground">Phone:</span> {formData.phone}</p>}
             </div>
           </Card>
         </div>
@@ -94,7 +119,7 @@ export default function HODProfile() {
                 <Label htmlFor="name">Full Name</Label>
                 <Input
                   id="name"
-                  value={formData.name}
+                  value={formData.name || profile?.full_name || ''}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="mt-1.5"
                 />
@@ -104,7 +129,7 @@ export default function HODProfile() {
                 <Input
                   id="email"
                   type="email"
-                  value={formData.email}
+                  value={formData.email || profile?.email || ''}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="mt-1.5"
                 />
@@ -113,7 +138,7 @@ export default function HODProfile() {
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
-                  value={formData.phone}
+                  value={formData.phone || profile?.phone || ''}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="mt-1.5"
                 />
@@ -122,9 +147,9 @@ export default function HODProfile() {
                 <Label htmlFor="department">Department</Label>
                 <Input
                   id="department"
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  className="mt-1.5"
+                  value={user?.department || formData.department}
+                  disabled
+                  className="mt-1.5 bg-muted"
                 />
               </div>
             </div>
@@ -133,24 +158,19 @@ export default function HODProfile() {
               <Label htmlFor="bio">Bio</Label>
               <Textarea
                 id="bio"
-                value={formData.bio}
+                value={formData.bio || profile?.bio || ''}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                 className="mt-1.5 min-h-[100px]"
+                placeholder="Tell us about yourself..."
               />
             </div>
 
-            <div className="mt-4">
-              <Label htmlFor="achievements">Key Achievements</Label>
-              <Textarea
-                id="achievements"
-                value={formData.achievements}
-                onChange={(e) => setFormData({ ...formData, achievements: e.target.value })}
-                className="mt-1.5"
-              />
-            </div>
-
-            <Button onClick={handleSaveProfile} className="mt-6">
-              <Save className="w-4 h-4 mr-2" />
+            <Button onClick={handleSaveProfile} className="mt-6" disabled={profileLoading}>
+              {profileLoading ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
               Save Changes
             </Button>
           </Card>
@@ -163,9 +183,13 @@ export default function HODProfile() {
                 <h3 className="font-display text-lg font-semibold">My Documents</h3>
               </div>
               <Label htmlFor="doc-upload" className="cursor-pointer">
-                <Button asChild>
+                <Button asChild disabled={isUploading}>
                   <span>
-                    <Upload className="w-4 h-4 mr-2" />
+                    {isUploading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
                     Upload Document
                   </span>
                 </Button>
@@ -174,33 +198,48 @@ export default function HODProfile() {
                   type="file"
                   className="hidden"
                   onChange={handleFileUpload}
+                  disabled={isUploading}
                 />
               </Label>
             </div>
 
-            <div className="space-y-3">
-              {documents.map((doc) => (
-                <div key={doc.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <FileText className="w-5 h-5 text-primary" />
+            {docsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : documents.length > 0 ? (
+              <div className="space-y-3">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{doc.file_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatFileSize(doc.file_size)} • {new Date(doc.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{doc.name}</p>
-                      <p className="text-sm text-muted-foreground">{doc.size} • {doc.uploadedAt}</p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleDownload(doc)}>
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteDocument(doc)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon">
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteDocument(doc)} className="text-destructive hover:text-destructive">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No documents uploaded yet.</p>
+                <p className="text-sm text-muted-foreground mt-1">Upload documents to share with the Principal.</p>
+              </div>
+            )}
           </Card>
         </div>
       </div>
