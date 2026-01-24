@@ -283,6 +283,10 @@ export type Database = {
         Args: { _department_id: string; _user_id: string }
         Returns: boolean
       }
+      can_access_document_storage: {
+        Args: { file_path: string }
+        Returns: boolean
+      }
       get_hod_department: { Args: { _user_id: string }; Returns: string }
       get_user_department: { Args: { _user_id: string }; Returns: string }
       has_role: {
