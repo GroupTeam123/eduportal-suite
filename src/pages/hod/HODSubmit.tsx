@@ -2,22 +2,25 @@ import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { mockReports } from '@/data/mockData';
-import { Send, FileText, CheckCircle } from 'lucide-react';
+import { useReports } from '@/hooks/useReports';
+import { useAuth } from '@/contexts/AuthContext';
+import { Send, FileText, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function HODSubmit() {
+  const { supabaseUser, user, departmentId } = useAuth();
+  const { reports, loading, submitReport, refetch } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const { toast } = useToast();
 
-  const approvedReports = mockReports.filter(r => r.status === 'approved' || r.status === 'submitted');
+  // Filter reports that are submitted to HOD and ready to forward to principal
+  const pendingReports = reports.filter(r => r.status === 'submitted_to_hod');
 
   const toggleReport = (reportId: string) => {
     setSelectedReports(prev => 
@@ -27,7 +30,7 @@ export default function HODSubmit() {
     );
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selectedReports.length === 0) {
       toast({
         title: 'Select Reports',
@@ -38,14 +41,26 @@ export default function HODSubmit() {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      // Submit all selected reports to principal
+      for (const reportId of selectedReports) {
+        await submitReport(reportId, 'principal');
+      }
       setSubmitted(true);
+      setSelectedReports([]);
       toast({
         title: 'Reports Submitted',
-        description: 'Selected reports have been sent to the Principal.',
+        description: `${selectedReports.length} report(s) have been sent to the Principal.`,
       });
-    }, 2000);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to submit reports. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -57,10 +72,20 @@ export default function HODSubmit() {
           </div>
           <h2 className="font-display text-2xl font-bold mb-2">Reports Submitted!</h2>
           <p className="text-muted-foreground mb-6">
-            {selectedReports.length} report(s) have been successfully sent to the Principal for review.
+            Your reports have been successfully sent to the Principal for review.
           </p>
-          <Button onClick={() => setSubmitted(false)}>Submit More Reports</Button>
+          <Button onClick={() => { setSubmitted(false); refetch(); }}>Submit More Reports</Button>
         </Card>
+      </DashboardLayout>
+    );
+  }
+
+  if (loading) {
+    return (
+      <DashboardLayout title="Submit to Principal" subtitle="Send compiled reports to the Principal">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
       </DashboardLayout>
     );
   }
@@ -71,63 +96,73 @@ export default function HODSubmit() {
         <Card className="p-6">
           <h3 className="font-display text-lg font-semibold mb-4">Select Reports to Submit</h3>
           
-          <div className="space-y-3 mb-6">
-            {approvedReports.map((report) => (
-              <label
-                key={report.id}
-                className="flex items-start gap-3 p-4 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-              >
-                <Checkbox
-                  checked={selectedReports.includes(report.id)}
-                  onCheckedChange={() => toggleReport(report.id)}
-                  className="mt-1"
+          {pendingReports.length > 0 ? (
+            <>
+              <div className="space-y-3 mb-6">
+                {pendingReports.map((report) => (
+                  <label
+                    key={report.id}
+                    className="flex items-start gap-3 p-4 bg-muted/30 rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={selectedReports.includes(report.id)}
+                      onCheckedChange={() => toggleReport(report.id)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-primary" />
+                        <span className="font-medium">{report.title}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {new Date(report.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded bg-accent/10 text-accent">
+                      Pending Review
+                    </span>
+                  </label>
+                ))}
+              </div>
+
+              <div className="mb-6">
+                <Label htmlFor="notes">Additional Notes (Optional)</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Add any comments or notes for the Principal..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="mt-1.5 min-h-[100px]"
                 />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-4 h-4 text-primary" />
-                    <span className="font-medium">{report.title}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    By {report.createdBy} • {report.createdAt}
-                  </p>
-                </div>
-                <span className={`text-xs px-2 py-1 rounded ${
-                  report.status === 'approved' ? 'bg-success/10 text-success' : 'bg-accent/10 text-accent'
-                }`}>
-                  {report.status}
-                </span>
-              </label>
-            ))}
-          </div>
+              </div>
 
-          <div className="mb-6">
-            <Label htmlFor="notes">Additional Notes (Optional)</Label>
-            <Textarea
-              id="notes"
-              placeholder="Add any comments or notes for the Principal..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="mt-1.5 min-h-[100px]"
-            />
-          </div>
-
-          <Button 
-            onClick={handleSubmit} 
-            className="w-full"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                Submitting...
-              </span>
-            ) : (
-              <>
-                <Send className="w-4 h-4 mr-2" />
-                Submit to Principal ({selectedReports.length} selected)
-              </>
-            )}
-          </Button>
+              <Button 
+                onClick={handleSubmit} 
+                className="w-full"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Submitting...
+                  </span>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Submit to Principal ({selectedReports.length} selected)
+                  </>
+                )}
+              </Button>
+            </>
+          ) : (
+            <div className="text-center py-8">
+              <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No reports pending for submission.</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Reports submitted by teachers will appear here.
+              </p>
+            </div>
+          )}
         </Card>
       </div>
     </DashboardLayout>
