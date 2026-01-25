@@ -218,92 +218,98 @@ export default function TeacherStudents() {
     await updateStudent(studentId, { custom_fields: updatedCustomFields });
   };
 
-  const renderStudentTable = (yearStudents: StudentRecord[]) => {
-    if (yearStudents.length === 0) {
-      return (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="mb-4">No students in this year. Add your first student.</p>
-          <Button onClick={handleAdd}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Student
+  const renderStudentTable = (yearStudents: StudentRecord[], year: number) => {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+            <Upload className="w-4 h-4 mr-2" />
+            Import Excel
           </Button>
         </div>
-      );
-    }
-
-    return (
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="font-semibold">Student ID</TableHead>
-              <TableHead className="font-semibold">Name</TableHead>
-              <TableHead className="font-semibold">Email</TableHead>
-              <TableHead className="font-semibold">Contact</TableHead>
-              <TableHead className="font-semibold">Attendance</TableHead>
-              {customColumns.map(col => (
-                <TableHead key={col.id} className="font-semibold">
-                  <div className="flex items-center gap-2">
-                    {col.name}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5"
-                      onClick={() => handleRemoveColumn(col.id)}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </TableHead>
-              ))}
-              <TableHead className="font-semibold text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {yearStudents.map((student) => (
-              <TableRow key={student.id} className="hover:bg-muted/30">
-                <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
-                <TableCell>{student.name}</TableCell>
-                <TableCell>{student.email || '-'}</TableCell>
-                <TableCell>{student.contact || '-'}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${
-                          (student.attendance || 0) >= 90 ? 'bg-success' :
-                          (student.attendance || 0) >= 75 ? 'bg-warning' :
-                          'bg-destructive'
-                        }`}
-                        style={{ width: `${student.attendance || 0}%` }}
-                      />
-                    </div>
-                    <span className="text-sm">{student.attendance || 0}%</span>
-                  </div>
-                </TableCell>
-                {customColumns.map(col => (
-                  <TableCell key={col.id}>
-                    <Input
-                      className="h-8 w-24"
-                      defaultValue={(student.custom_fields as Record<string, string> | null)?.[col.name] || ''}
-                      onBlur={(e) => handleUpdateCustomField(student.id, col.name, e.target.value)}
-                    />
-                  </TableCell>
+        {yearStudents.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="mb-4">No students in this year. Add your first student.</p>
+            <Button onClick={handleAdd}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Student
+            </Button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">Student ID</TableHead>
+                  <TableHead className="font-semibold">Name</TableHead>
+                  <TableHead className="font-semibold">Email</TableHead>
+                  <TableHead className="font-semibold">Contact</TableHead>
+                  <TableHead className="font-semibold">Attendance</TableHead>
+                  {customColumns.map(col => (
+                    <TableHead key={col.id} className="font-semibold">
+                      <div className="flex items-center gap-2">
+                        {col.name}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => handleRemoveColumn(col.id)}
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </TableHead>
+                  ))}
+                  <TableHead className="font-semibold text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {yearStudents.map((student) => (
+                  <TableRow key={student.id} className="hover:bg-muted/30">
+                    <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
+                    <TableCell>{student.name}</TableCell>
+                    <TableCell>{student.email || '-'}</TableCell>
+                    <TableCell>{student.contact || '-'}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              (student.attendance || 0) >= 90 ? 'bg-success' :
+                              (student.attendance || 0) >= 75 ? 'bg-warning' :
+                              'bg-destructive'
+                            }`}
+                            style={{ width: `${student.attendance || 0}%` }}
+                          />
+                        </div>
+                        <span className="text-sm">{student.attendance || 0}%</span>
+                      </div>
+                    </TableCell>
+                    {customColumns.map(col => (
+                      <TableCell key={col.id}>
+                        <Input
+                          className="h-8 w-24"
+                          defaultValue={(student.custom_fields as Record<string, string> | null)?.[col.name] || ''}
+                          onBlur={(e) => handleUpdateCustomField(student.id, col.name, e.target.value)}
+                        />
+                      </TableCell>
+                    ))}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(student)}>
+                          Edit
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(student)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(student)}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(student)}>
-                      Delete
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </div>
     );
   };
@@ -394,10 +400,6 @@ export default function TeacherStudents() {
           <Plus className="w-4 h-4 mr-2" />
           Add Student
         </Button>
-        <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
-          <Upload className="w-4 h-4 mr-2" />
-          Import Excel
-        </Button>
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline">
@@ -436,7 +438,7 @@ export default function TeacherStudents() {
 
           {YEAR_LABELS.map((_, idx) => (
             <TabsContent key={idx + 1} value={String(idx + 1)}>
-              {renderStudentTable(getStudentsByYear(idx + 1))}
+              {renderStudentTable(getStudentsByYear(idx + 1), idx + 1)}
             </TabsContent>
           ))}
           
