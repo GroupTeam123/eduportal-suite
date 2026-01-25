@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Plus, Loader2, Download, FileSpreadsheet, AlertCircle, CheckCircle, Columns, X, RefreshCw } from 'lucide-react';
+import { Upload, Plus, Loader2, Download, FileSpreadsheet, AlertCircle, CheckCircle, Columns, X, RefreshCw, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { parseExcelFile, generateSampleExcel, ParsedExcelResult } from '@/utils/excelParser';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -29,6 +29,7 @@ const YEAR_LABELS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 interface CustomColumn {
   id: string;
   name: string;
+  isSaved: boolean;
 }
 
 export default function TeacherStudents() {
@@ -239,17 +240,47 @@ export default function TeacherStudents() {
     const newCol: CustomColumn = {
       id: Date.now().toString(),
       name: newColumnName.trim(),
+      isSaved: false,
     };
     setCustomColumns(prev => [...prev, newCol]);
     setNewColumnName('');
     toast({
       title: 'Column Added',
-      description: `"${newCol.name}" column has been added.`,
+      description: `"${newCol.name}" column has been added. Click the checkmark to save it permanently.`,
     });
   };
 
   const handleRemoveColumn = (colId: string) => {
     setCustomColumns(prev => prev.filter(c => c.id !== colId));
+  };
+
+  const handleSaveColumn = (colId: string) => {
+    setCustomColumns(prev => prev.map(c => 
+      c.id === colId ? { ...c, isSaved: true } : c
+    ));
+    toast({
+      title: 'Column Saved',
+      description: 'Column has been saved permanently.',
+    });
+  };
+
+  // Get saved columns from existing student custom_fields (columns that have data)
+  const getSavedColumnsFromData = (yearStudents: StudentRecord[]) => {
+    const savedCols = new Set<string>();
+    const monthKeys = MONTH_LABELS.map(m => m.toLowerCase() + '_attendance');
+    
+    yearStudents.forEach(student => {
+      const customFields = student.custom_fields as Record<string, unknown> | null;
+      if (customFields) {
+        Object.keys(customFields).forEach(key => {
+          // Exclude monthly attendance keys
+          if (!monthKeys.includes(key)) {
+            savedCols.add(key);
+          }
+        });
+      }
+    });
+    return Array.from(savedCols);
   };
 
   const handleUpdateCustomField = async (studentId: string, columnName: string, value: string) => {
@@ -338,19 +369,42 @@ export default function TeacherStudents() {
                       {month} Att.
                     </TableHead>
                   ))}
-                  {customColumns.map(col => (
+                  {/* Saved columns from database */}
+                  {getSavedColumnsFromData(yearStudents).map(colName => (
+                    <TableHead key={colName} className="font-semibold">
+                      {colName}
+                    </TableHead>
+                  ))}
+                  {/* Temporary custom columns */}
+                  {customColumns.filter(col => !col.isSaved).map(col => (
                     <TableHead key={col.id} className="font-semibold">
                       <div className="flex items-center gap-2">
                         {col.name}
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-5 w-5"
+                          className="h-5 w-5 text-success hover:text-success hover:bg-success/10"
+                          onClick={() => handleSaveColumn(col.id)}
+                          title="Save column permanently"
+                        >
+                          <Check className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 text-destructive hover:text-destructive"
                           onClick={() => handleRemoveColumn(col.id)}
+                          title="Remove column"
                         >
                           <X className="w-3 h-3" />
                         </Button>
                       </div>
+                    </TableHead>
+                  ))}
+                  {/* Saved custom columns (from this session) */}
+                  {customColumns.filter(col => col.isSaved).map(col => (
+                    <TableHead key={col.id} className="font-semibold">
+                      {col.name}
                     </TableHead>
                   ))}
                   <TableHead className="font-semibold text-right">Actions</TableHead>
@@ -403,6 +457,17 @@ export default function TeacherStudents() {
                           </TableCell>
                         );
                       })}
+                      {/* Saved columns from database */}
+                      {getSavedColumnsFromData(yearStudents).map(colName => (
+                        <TableCell key={colName}>
+                          <Input
+                            className="h-8 w-24"
+                            defaultValue={(customFields as Record<string, string> | null)?.[colName] || ''}
+                            onBlur={(e) => handleUpdateCustomField(student.id, colName, e.target.value)}
+                          />
+                        </TableCell>
+                      ))}
+                      {/* All custom columns (both temporary and saved from this session) */}
                       {customColumns.map(col => (
                         <TableCell key={col.id}>
                           <Input
@@ -565,6 +630,44 @@ export default function TeacherStudents() {
                 Only months with data will appear as columns in the table.
               </p>
             </div>
+            
+            {/* Custom Fields Section - only show if there are saved columns */}
+            {(() => {
+              const allStudents = getStudentsByYear(formData.year || 1);
+              const savedCols = getSavedColumnsFromData(allStudents);
+              // Also add columns from current session that are saved
+              const sessionSavedCols = customColumns.filter(c => c.isSaved).map(c => c.name);
+              const allSavedCols = [...new Set([...savedCols, ...sessionSavedCols])];
+              
+              if (allSavedCols.length === 0) return null;
+              
+              return (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Custom Fields</Label>
+                  <div className="grid grid-cols-2 gap-3 p-2 border rounded-md bg-muted/30">
+                    {allSavedCols.map(colName => (
+                      <div key={colName} className="space-y-1">
+                        <Label htmlFor={`custom-${colName}`} className="text-xs text-muted-foreground capitalize">
+                          {colName.replace(/_/g, ' ')}
+                        </Label>
+                        <Input
+                          id={`custom-${colName}`}
+                          className="h-8"
+                          value={String((formData.custom_fields as Record<string, unknown>)?.[colName] || '')}
+                          onChange={(e) => setFormData(prev => ({
+                            ...prev,
+                            custom_fields: {
+                              ...(prev.custom_fields || {}),
+                              [colName]: e.target.value
+                            }
+                          }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <div className="flex justify-end gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancel
