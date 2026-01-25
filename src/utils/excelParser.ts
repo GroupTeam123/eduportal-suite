@@ -36,6 +36,17 @@ const COLUMN_MAPPINGS: Record<string, keyof NewStudentRecord> = {
   'notes': 'notes',
   'remarks': 'notes',
   'comments': 'notes',
+  'year': 'year',
+  'student year': 'year',
+  'class year': 'year',
+  'academic year': 'year',
+  'student id': 'student_id',
+  'studentid': 'student_id',
+  'roll number': 'student_id',
+  'roll no': 'student_id',
+  'enrollment': 'student_id',
+  'enrollment number': 'student_id',
+  'id': 'student_id',
 };
 
 function normalizeHeader(header: string): keyof NewStudentRecord | null {
@@ -61,6 +72,12 @@ function parseValue(value: unknown, field: keyof NewStudentRecord): unknown {
     case 'attendance':
       const att = typeof value === 'number' ? value : parseFloat(String(value).replace('%', ''));
       return isNaN(att) ? 0 : Math.min(100, Math.max(0, att));
+    case 'year':
+      const year = typeof value === 'number' ? value : parseInt(String(value));
+      if (isNaN(year) || year < 1 || year > 4) return 1;
+      return year;
+    case 'student_id':
+      return String(value).trim() || undefined;
     case 'guardian_name':
     case 'guardian_phone':
     case 'notes':
@@ -117,7 +134,7 @@ export function parseExcelFile(file: File): Promise<ParsedExcelResult> {
             data: [],
             errors: [
               'Could not find a "Name" column in the Excel file.',
-              'Expected columns: Name, Email, Contact, Attendance, Guardian Name, Guardian Phone, Notes',
+              'Expected columns: Name, Student ID, Year, Email, Contact, Attendance, Guardian Name, Guardian Phone, Notes',
             ],
             totalRows: jsonData.length,
             validRows: 0,
@@ -155,6 +172,8 @@ export function parseExcelFile(file: File): Promise<ParsedExcelResult> {
             guardian_name: record.guardian_name,
             guardian_phone: record.guardian_phone,
             notes: record.notes,
+            year: record.year ?? 1,
+            student_id: record.student_id,
           });
         });
 
@@ -196,7 +215,9 @@ export function parseExcelFile(file: File): Promise<ParsedExcelResult> {
 export function generateSampleExcel(): void {
   const sampleData = [
     {
+      'Student ID': 'STU001',
       'Name': 'John Smith',
+      'Year': '1',
       'Email': 'john.smith@student.edu',
       'Contact': '9876543210',
       'Attendance': '92',
@@ -205,7 +226,9 @@ export function generateSampleExcel(): void {
       'Notes': 'Excellent student',
     },
     {
+      'Student ID': 'STU002',
       'Name': 'Jane Doe',
+      'Year': '2',
       'Email': 'jane.doe@student.edu',
       'Contact': '9876543212',
       'Attendance': '88',
@@ -214,13 +237,26 @@ export function generateSampleExcel(): void {
       'Notes': '',
     },
     {
+      'Student ID': 'STU003',
       'Name': 'Mike Johnson',
+      'Year': '3',
       'Email': 'mike.j@student.edu',
       'Contact': '9876543214',
       'Attendance': '75',
       'Guardian Name': 'David Johnson',
       'Guardian Phone': '9876543215',
       'Notes': 'Needs improvement in attendance',
+    },
+    {
+      'Student ID': 'STU004',
+      'Name': 'Sarah Williams',
+      'Year': '4',
+      'Email': 'sarah.w@student.edu',
+      'Contact': '9876543216',
+      'Attendance': '95',
+      'Guardian Name': 'Emily Williams',
+      'Guardian Phone': '9876543217',
+      'Notes': 'Final year student',
     },
   ];
 
@@ -230,7 +266,9 @@ export function generateSampleExcel(): void {
 
   // Set column widths
   worksheet['!cols'] = [
+    { wch: 12 }, // Student ID
     { wch: 20 }, // Name
+    { wch: 8 },  // Year
     { wch: 25 }, // Email
     { wch: 15 }, // Contact
     { wch: 12 }, // Attendance

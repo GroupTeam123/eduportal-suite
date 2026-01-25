@@ -1,24 +1,45 @@
 import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { DataTable } from '@/components/ui/data-table';
 import { useStudents, StudentRecord, NewStudentRecord } from '@/hooks/useStudents';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Upload, Plus, Loader2, Download, FileSpreadsheet, AlertCircle, CheckCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Upload, Plus, Loader2, Download, FileSpreadsheet, AlertCircle, CheckCircle, Columns, X, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { parseExcelFile, generateSampleExcel, ParsedExcelResult } from '@/utils/excelParser';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Card } from '@/components/ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
+const YEAR_LABELS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+
+interface CustomColumn {
+  id: string;
+  name: string;
+}
 
 export default function TeacherStudents() {
   const { user, supabaseUser, departmentId } = useAuth();
-  const { students, loading, addStudent, updateStudent, deleteStudent, importStudents } = useStudents(departmentId);
+  const { students, loading, addStudent, updateStudent, deleteStudent, upsertStudents } = useStudents(departmentId);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string>('1');
+  const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
+  const [newColumnName, setNewColumnName] = useState('');
   const [importState, setImportState] = useState<{
     status: 'idle' | 'parsing' | 'preview' | 'importing' | 'complete';
     result: ParsedExcelResult | null;
@@ -32,38 +53,33 @@ export default function TeacherStudents() {
     guardian_name: '',
     guardian_phone: '',
     notes: '',
+    year: 1,
+    student_id: '',
+    custom_fields: {},
+    marks: {},
   });
   const { toast } = useToast();
 
-  const columns = [
-    { key: 'name', label: 'Student Name' },
-    { key: 'email', label: 'Email' },
-    { key: 'contact', label: 'Contact' },
-    { 
-      key: 'attendance', 
-      label: 'Attendance',
-      render: (student: StudentRecord) => (
-        <div className="flex items-center gap-2">
-          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-            <div 
-              className={`h-full rounded-full ${
-                (student.attendance || 0) >= 90 ? 'bg-success' :
-                (student.attendance || 0) >= 75 ? 'bg-warning' :
-                'bg-destructive'
-              }`}
-              style={{ width: `${student.attendance || 0}%` }}
-            />
-          </div>
-          <span className="text-sm">{student.attendance || 0}%</span>
-        </div>
-      )
-    },
-    { key: 'guardian_name', label: 'Guardian' },
-  ];
+  // Filter students by year
+  const getStudentsByYear = (year: number) => {
+    return students.filter(s => (s.year || 1) === year);
+  };
 
   const handleAdd = () => {
     setEditingStudent(null);
-    setFormData({ name: '', email: '', contact: undefined, attendance: 0, guardian_name: '', guardian_phone: '', notes: '' });
+    setFormData({
+      name: '',
+      email: '',
+      contact: undefined,
+      attendance: 0,
+      guardian_name: '',
+      guardian_phone: '',
+      notes: '',
+      year: parseInt(selectedYear),
+      student_id: '',
+      custom_fields: {},
+      marks: {},
+    });
     setIsAddDialogOpen(true);
   };
 
@@ -77,12 +93,18 @@ export default function TeacherStudents() {
       guardian_name: student.guardian_name || '',
       guardian_phone: student.guardian_phone || '',
       notes: student.notes || '',
+      year: student.year || 1,
+      student_id: student.student_id || '',
+      custom_fields: student.custom_fields || {},
+      marks: student.marks || {},
     });
     setIsAddDialogOpen(true);
   };
 
   const handleDelete = async (student: StudentRecord) => {
-    await deleteStudent(student.id);
+    if (confirm(`Are you sure you want to delete ${student.name}?`)) {
+      await deleteStudent(student.id);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -115,7 +137,6 @@ export default function TeacherStudents() {
       setImportState({ status: 'idle', result: null, progress: 0 });
     }
 
-    // Reset file input
     e.target.value = '';
   };
 
@@ -124,28 +145,13 @@ export default function TeacherStudents() {
 
     setImportState(prev => ({ ...prev, status: 'importing', progress: 0 }));
 
-    const batchSize = 10;
     const data = importState.result.data;
-    let imported = 0;
-
-    for (let i = 0; i < data.length; i += batchSize) {
-      const batch = data.slice(i, i + batchSize);
-      await importStudents(batch, supabaseUser.id);
-      imported += batch.length;
-      setImportState(prev => ({ 
-        ...prev, 
-        progress: Math.round((imported / data.length) * 100) 
-      }));
-    }
+    
+    // Use upsert to match by name/student_id
+    await upsertStudents(data, supabaseUser.id);
 
     setImportState({ status: 'complete', result: importState.result, progress: 100 });
-    
-    toast({
-      title: 'Import Complete',
-      description: `Successfully imported ${data.length} students.`,
-    });
 
-    // Reset after a short delay
     setTimeout(() => {
       setIsImportDialogOpen(false);
       setImportState({ status: 'idle', result: null, progress: 0 });
@@ -164,6 +170,128 @@ export default function TeacherStudents() {
     setImportState({ status: 'idle', result: null, progress: 0 });
   };
 
+  const handleAddColumn = () => {
+    if (!newColumnName.trim()) return;
+    const newCol: CustomColumn = {
+      id: Date.now().toString(),
+      name: newColumnName.trim(),
+    };
+    setCustomColumns(prev => [...prev, newCol]);
+    setNewColumnName('');
+    toast({
+      title: 'Column Added',
+      description: `"${newCol.name}" column has been added.`,
+    });
+  };
+
+  const handleRemoveColumn = (colId: string) => {
+    setCustomColumns(prev => prev.filter(c => c.id !== colId));
+  };
+
+  const handleUpdateCustomField = async (studentId: string, columnName: string, value: string) => {
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    const updatedCustomFields = {
+      ...(student.custom_fields || {}),
+      [columnName]: value,
+    };
+
+    await updateStudent(studentId, { custom_fields: updatedCustomFields });
+  };
+
+  const renderStudentTable = (yearStudents: StudentRecord[]) => {
+    if (yearStudents.length === 0) {
+      return (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="mb-4">No students in this year. Add your first student.</p>
+          <Button onClick={handleAdd}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Student
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="font-semibold">Student ID</TableHead>
+              <TableHead className="font-semibold">Name</TableHead>
+              <TableHead className="font-semibold">Email</TableHead>
+              <TableHead className="font-semibold">Contact</TableHead>
+              <TableHead className="font-semibold">Attendance</TableHead>
+              <TableHead className="font-semibold">Guardian</TableHead>
+              {customColumns.map(col => (
+                <TableHead key={col.id} className="font-semibold">
+                  <div className="flex items-center gap-2">
+                    {col.name}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5"
+                      onClick={() => handleRemoveColumn(col.id)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </TableHead>
+              ))}
+              <TableHead className="font-semibold text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {yearStudents.map((student) => (
+              <TableRow key={student.id} className="hover:bg-muted/30">
+                <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
+                <TableCell>{student.name}</TableCell>
+                <TableCell>{student.email || '-'}</TableCell>
+                <TableCell>{student.contact || '-'}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          (student.attendance || 0) >= 90 ? 'bg-success' :
+                          (student.attendance || 0) >= 75 ? 'bg-warning' :
+                          'bg-destructive'
+                        }`}
+                        style={{ width: `${student.attendance || 0}%` }}
+                      />
+                    </div>
+                    <span className="text-sm">{student.attendance || 0}%</span>
+                  </div>
+                </TableCell>
+                <TableCell>{student.guardian_name || '-'}</TableCell>
+                {customColumns.map(col => (
+                  <TableCell key={col.id}>
+                    <Input
+                      className="h-8 w-24"
+                      defaultValue={(student.custom_fields as Record<string, string> | null)?.[col.name] || ''}
+                      onBlur={(e) => handleUpdateCustomField(student.id, col.name, e.target.value)}
+                    />
+                  </TableCell>
+                ))}
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => handleEdit(student)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(student)}>
+                      Delete
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <DashboardLayout title="Student Management" subtitle="Loading...">
@@ -175,8 +303,8 @@ export default function TeacherStudents() {
   }
 
   return (
-    <DashboardLayout title="Student Management" subtitle="Add, edit, and manage student records">
-      <div className="mb-6 flex items-center gap-3">
+    <DashboardLayout title="Student Management" subtitle="Manage student records by year">
+      <div className="mb-6 flex items-center gap-3 flex-wrap">
         <Button onClick={handleAdd}>
           <Plus className="w-4 h-4 mr-2" />
           Add Student
@@ -185,34 +313,83 @@ export default function TeacherStudents() {
           <Upload className="w-4 h-4 mr-2" />
           Import Excel
         </Button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline">
+              <Columns className="w-4 h-4 mr-2" />
+              Add Column
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 bg-background border shadow-lg">
+            <div className="space-y-3">
+              <Label>Column Name</Label>
+              <Input
+                placeholder="e.g., Semester Marks"
+                value={newColumnName}
+                onChange={(e) => setNewColumnName(e.target.value)}
+              />
+              <Button size="sm" onClick={handleAddColumn} disabled={!newColumnName.trim()}>
+                Add Column
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
-      {students.length === 0 ? (
-        <div className="bg-card rounded-xl shadow-card p-12 text-center">
-          <p className="text-muted-foreground mb-4">No students added yet. Start by adding your first student.</p>
-          <Button onClick={handleAdd}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Student
-          </Button>
-        </div>
-      ) : (
-        <DataTable
-          data={students}
-          columns={columns}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          searchPlaceholder="Search students..."
-          title="Student Records"
-        />
-      )}
+      <Card className="p-6">
+        <Tabs value={selectedYear} onValueChange={setSelectedYear}>
+          <TabsList className="mb-6">
+            {YEAR_LABELS.map((label, idx) => (
+              <TabsTrigger key={idx + 1} value={String(idx + 1)}>
+                {label} ({getStudentsByYear(idx + 1).length})
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {YEAR_LABELS.map((_, idx) => (
+            <TabsContent key={idx + 1} value={String(idx + 1)}>
+              {renderStudentTable(getStudentsByYear(idx + 1))}
+            </TabsContent>
+          ))}
+        </Tabs>
+      </Card>
 
       {/* Add/Edit Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingStudent ? 'Edit Student' : 'Add New Student'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="student_id">Student ID / Roll No</Label>
+                <Input
+                  id="student_id"
+                  value={formData.student_id || ''}
+                  onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
+                  placeholder="e.g., STU001"
+                />
+              </div>
+              <div>
+                <Label htmlFor="year">Year</Label>
+                <Select
+                  value={String(formData.year || 1)}
+                  onValueChange={(v) => setFormData({ ...formData, year: parseInt(v) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background border shadow-lg z-50">
+                    {YEAR_LABELS.map((label, idx) => (
+                      <SelectItem key={idx + 1} value={String(idx + 1)}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div>
               <Label htmlFor="name">Full Name</Label>
               <Input
@@ -307,9 +484,16 @@ export default function TeacherStudents() {
           {importState.status === 'idle' && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Upload an Excel file (.xlsx, .xls) or CSV file containing student data. 
-                The file should have columns for Name, Email, Contact, Attendance, etc.
+                Upload an Excel file (.xlsx, .xls) containing student data. 
+                Students will be matched by <strong>Student ID</strong> or <strong>Name</strong> to update existing records.
               </p>
+              
+              <Alert>
+                <RefreshCw className="h-4 w-4" />
+                <AlertDescription>
+                  If a student with the same ID or name exists, their record will be updated. Otherwise, a new record is created.
+                </AlertDescription>
+              </Alert>
               
               <Button variant="outline" size="sm" onClick={handleDownloadTemplate}>
                 <Download className="w-4 h-4 mr-2" />
@@ -375,8 +559,10 @@ export default function TeacherStudents() {
                     <div className="space-y-1">
                       {importState.result.data.slice(0, 5).map((student, i) => (
                         <div key={i} className="text-sm bg-background rounded px-2 py-1 flex justify-between">
-                          <span className="font-medium">{student.name}</span>
-                          <span className="text-muted-foreground text-xs">{student.email || 'No email'}</span>
+                          <span className="font-medium">
+                            {student.student_id ? `[${student.student_id}] ` : ''}{student.name}
+                          </span>
+                          <span className="text-muted-foreground text-xs">Year {student.year || 1}</span>
                         </div>
                       ))}
                     </div>
@@ -430,7 +616,7 @@ export default function TeacherStudents() {
               <CheckCircle className="w-12 h-12 mx-auto text-success mb-4" />
               <p className="font-medium">Import Complete!</p>
               <p className="text-sm text-muted-foreground">
-                {importState.result?.validRows} students have been added.
+                Students have been added/updated.
               </p>
             </div>
           )}
