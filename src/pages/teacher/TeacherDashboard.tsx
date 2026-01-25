@@ -7,36 +7,50 @@ import { useReports } from '@/hooks/useReports';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useMemo } from 'react';
 
-// Helper to compute weekly attendance from custom_fields
-const computeWeeklyAttendance = (students: Array<{ custom_fields?: Record<string, unknown> }>) => {
-  const weeklyData: Record<string, { total: number; count: number }> = {};
+// Month labels for attendance tracking
+const MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const MONTH_ORDER: Record<string, number> = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
+};
+
+// Helper to compute monthly attendance from custom_fields
+const computeMonthlyAttendance = (students: Array<{ custom_fields?: Record<string, unknown> }>) => {
+  const monthlyData: Record<string, { total: number; count: number }> = {};
   
   students.forEach(student => {
     if (student.custom_fields) {
-      Object.entries(student.custom_fields).forEach(([key, value]) => {
-        const weekMatch = key.toLowerCase().match(/week\s*(\d+)/i);
-        if (weekMatch && typeof value === 'number') {
-          const weekKey = `Week ${weekMatch[1]}`;
-          if (!weeklyData[weekKey]) {
-            weeklyData[weekKey] = { total: 0, count: 0 };
+      MONTH_LABELS.forEach(month => {
+        const key = month.toLowerCase() + '_attendance';
+        const value = student.custom_fields?.[key];
+        if (value !== undefined && value !== null && value !== '') {
+          const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+          if (!isNaN(numValue)) {
+            if (!monthlyData[month]) {
+              monthlyData[month] = { total: 0, count: 0 };
+            }
+            monthlyData[month].total += numValue;
+            monthlyData[month].count += 1;
           }
-          weeklyData[weekKey].total += value;
-          weeklyData[weekKey].count += 1;
         }
       });
     }
   });
   
-  // Convert to chart format and sort by week number
-  return Object.entries(weeklyData)
+  // Convert to chart format and sort by month order
+  return Object.entries(monthlyData)
     .map(([name, data]) => ({
-      name,
+      name: name.substring(0, 3), // Abbreviated month name (Jan, Feb, etc.)
       value: data.count > 0 ? Math.round(data.total / data.count) : 0
     }))
     .sort((a, b) => {
-      const weekA = parseInt(a.name.replace('Week ', ''));
-      const weekB = parseInt(b.name.replace('Week ', ''));
-      return weekA - weekB;
+      const monthA = MONTH_ORDER[a.name.toLowerCase()] ?? MONTH_ORDER[Object.keys(MONTH_ORDER).find(m => m.startsWith(a.name.toLowerCase())) || ''] ?? 0;
+      const monthB = MONTH_ORDER[b.name.toLowerCase()] ?? MONTH_ORDER[Object.keys(MONTH_ORDER).find(m => m.startsWith(b.name.toLowerCase())) || ''] ?? 0;
+      return monthA - monthB;
     });
 };
 
@@ -70,13 +84,13 @@ export default function TeacherDashboard() {
     });
   }, [studentsByYear]);
   
-  // Weekly attendance data for each year
-  const weeklyAttendanceByYear = useMemo(() => {
+  // Monthly attendance data for each year
+  const monthlyAttendanceByYear = useMemo(() => {
     return {
-      1: computeWeeklyAttendance(studentsByYear[1]),
-      2: computeWeeklyAttendance(studentsByYear[2]),
-      3: computeWeeklyAttendance(studentsByYear[3]),
-      4: computeWeeklyAttendance(studentsByYear[4]),
+      1: computeMonthlyAttendance(studentsByYear[1]),
+      2: computeMonthlyAttendance(studentsByYear[2]),
+      3: computeMonthlyAttendance(studentsByYear[3]),
+      4: computeMonthlyAttendance(studentsByYear[4]),
     };
   }, [studentsByYear]);
   
@@ -123,16 +137,16 @@ export default function TeacherDashboard() {
         />
       </div>
 
-      {/* Weekly Attendance Charts - 2x2 Grid */}
+      {/* Monthly Attendance Charts - 2x2 Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {[1, 2, 3, 4].map((year, idx) => (
           <div key={year} className="bg-card rounded-xl shadow-card p-6">
             <h3 className="font-display text-lg font-semibold mb-4">
-              {yearLabels[idx]} Year Weekly Attendance Trend
+              {yearLabels[idx]} Year Monthly Attendance Trend
             </h3>
-            {weeklyAttendanceByYear[year as keyof typeof weeklyAttendanceByYear].length > 0 ? (
+            {monthlyAttendanceByYear[year as keyof typeof monthlyAttendanceByYear].length > 0 ? (
               <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={weeklyAttendanceByYear[year as keyof typeof weeklyAttendanceByYear]}>
+                <BarChart data={monthlyAttendanceByYear[year as keyof typeof monthlyAttendanceByYear]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} domain={[0, 100]} />
@@ -149,8 +163,8 @@ export default function TeacherDashboard() {
             ) : (
               <div className="h-[250px] flex items-center justify-center text-muted-foreground">
                 <p className="text-center">
-                  No weekly attendance data available.<br />
-                  <span className="text-sm">Add columns like "Week 1", "Week 2", etc. in the Students table.</span>
+                  No monthly attendance data available.<br />
+                  <span className="text-sm">Add monthly attendance (January, February, etc.) in the Students table.</span>
                 </p>
               </div>
             )}
