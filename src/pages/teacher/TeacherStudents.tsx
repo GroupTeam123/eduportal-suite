@@ -553,6 +553,8 @@ export default function TeacherStudents() {
                   value={formData.student_id || ''}
                   onChange={(e) => setFormData({ ...formData, student_id: e.target.value })}
                   placeholder="e.g., STU001"
+                  disabled={!!editingStudent}
+                  className={editingStudent ? 'bg-muted cursor-not-allowed' : ''}
                 />
               </div>
               <div>
