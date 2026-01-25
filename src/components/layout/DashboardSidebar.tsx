@@ -40,6 +40,7 @@ const principalNav: NavItem[] = [
   { label: 'Dashboard', icon: BarChart3, path: '/principal' },
   { label: 'Departments', icon: Building2, path: '/principal/departments' },
   { label: 'HOD Data', icon: GraduationCap, path: '/principal/hods' },
+  { label: 'Teacher Data', icon: Users, path: '/principal/teachers' },
   { label: 'Reports', icon: FolderOpen, path: '/principal/reports' },
   { label: 'HOD Documents', icon: FileText, path: '/principal/documents' },
 ];
