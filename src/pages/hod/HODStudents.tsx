@@ -131,11 +131,10 @@ export default function HODStudents() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold">Student ID</TableHead>
+                <TableHead className="font-semibold">Student ID</TableHead>
                   <TableHead className="font-semibold">Name</TableHead>
                   <TableHead className="font-semibold">Email</TableHead>
                   <TableHead className="font-semibold">Contact</TableHead>
-                  <TableHead className="font-semibold">Guardian</TableHead>
                   <TableHead className="font-semibold">Attendance</TableHead>
                   {monthlyColumnsWithData.map(month => (
                     <TableHead key={month} className="font-semibold">
@@ -159,7 +158,6 @@ export default function HODStudents() {
                       <TableCell>{student.name}</TableCell>
                       <TableCell>{student.email || '-'}</TableCell>
                       <TableCell>{student.contact || '-'}</TableCell>
-                      <TableCell>{student.guardian_name || '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">

@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useDocuments } from '@/hooks/useDocuments';
 import { Upload, Trash2, FileText, Download, Save, User, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProfile } from '@/hooks/useProfile';
 
@@ -17,28 +16,28 @@ export default function HODProfile() {
   const { documents, loading: docsLoading, uploadDocument, deleteDocument, getDownloadUrl } = useDocuments(supabaseUser?.id || null, departmentId);
   
   const [formData, setFormData] = useState({
-    name: '',
+    full_name: '',
     email: '',
-    department: user?.department || '',
     phone: '',
     bio: '',
-    qualification: '',
-    experience: '',
-    achievements: '',
+    qualifications: '',
+    years_of_experience: '' as number | '',
   });
   const [isUploading, setIsUploading] = useState(false);
-  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync form data with profile when loaded
   useState(() => {
     if (profile) {
-      setFormData(prev => ({
-        ...prev,
-        name: profile.full_name || '',
+      const profileData = (profile as unknown) as Record<string, unknown>;
+      setFormData({
+        full_name: profile.full_name || '',
         email: profile.email || '',
         phone: profile.phone || '',
         bio: profile.bio || '',
-      }));
+        qualifications: profileData?.qualifications as string || '',
+        years_of_experience: profileData?.years_of_experience as number | '' || '',
+      });
     }
   });
 
@@ -70,12 +69,9 @@ export default function HODProfile() {
   };
 
   const handleSaveProfile = async () => {
-    await updateProfile({
-      full_name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      bio: formData.bio,
-    });
+    setIsSaving(true);
+    await updateProfile(formData);
+    setIsSaving(false);
   };
 
   const formatFileSize = (bytes: number | null) => {
@@ -85,6 +81,16 @@ export default function HODProfile() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  if (profileLoading) {
+    return (
+      <DashboardLayout title="About Me" subtitle="Loading...">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout title="About Me" subtitle="Manage your personal information and documents">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -93,15 +99,15 @@ export default function HODProfile() {
           <Card className="p-6 text-center">
             <div className="w-24 h-24 rounded-full bg-gradient-secondary mx-auto mb-4 flex items-center justify-center">
               <span className="text-3xl font-bold text-secondary-foreground">
-                {(profile?.full_name || formData.name || 'HOD').split(' ').map(n => n[0]).join('')}
+                {(profile?.full_name || formData.full_name || 'HOD').split(' ').map(n => n[0]).join('')}
               </span>
             </div>
-            <h2 className="font-display text-xl font-bold">{profile?.full_name || formData.name}</h2>
+            <h2 className="font-display text-xl font-bold">{profile?.full_name || formData.full_name}</h2>
             <p className="text-primary font-medium">Head of Department</p>
-            <p className="text-muted-foreground">{user?.department || formData.department}</p>
+            <p className="text-muted-foreground">{user?.department || 'Not assigned'}</p>
             <div className="mt-4 space-y-2 text-sm">
+              <p><span className="text-muted-foreground">Role:</span> HOD</p>
               <p><span className="text-muted-foreground">Email:</span> {profile?.email || formData.email}</p>
-              {formData.phone && <p><span className="text-muted-foreground">Phone:</span> {formData.phone}</p>}
             </div>
           </Card>
         </div>
@@ -116,11 +122,11 @@ export default function HODProfile() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="full_name">Full Name</Label>
                 <Input
-                  id="name"
-                  value={formData.name || profile?.full_name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  id="full_name"
+                  value={formData.full_name || profile?.full_name || ''}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                   className="mt-1.5"
                 />
               </div>
@@ -147,9 +153,31 @@ export default function HODProfile() {
                 <Label htmlFor="department">Department</Label>
                 <Input
                   id="department"
-                  value={user?.department || formData.department}
+                  value={user?.department || 'Not assigned'}
                   disabled
                   className="mt-1.5 bg-muted"
+                />
+              </div>
+              <div>
+                <Label htmlFor="qualifications">Qualifications</Label>
+                <Input
+                  id="qualifications"
+                  value={formData.qualifications}
+                  onChange={(e) => setFormData({ ...formData, qualifications: e.target.value })}
+                  className="mt-1.5"
+                  placeholder="e.g., M.Tech, PhD"
+                />
+              </div>
+              <div>
+                <Label htmlFor="years_of_experience">Years of Experience</Label>
+                <Input
+                  id="years_of_experience"
+                  type="number"
+                  value={formData.years_of_experience}
+                  onChange={(e) => setFormData({ ...formData, years_of_experience: e.target.value ? parseInt(e.target.value) : '' })}
+                  className="mt-1.5"
+                  placeholder="e.g., 10"
+                  min={0}
                 />
               </div>
             </div>
@@ -165,13 +193,18 @@ export default function HODProfile() {
               />
             </div>
 
-            <Button onClick={handleSaveProfile} className="mt-6" disabled={profileLoading}>
-              {profileLoading ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            <Button onClick={handleSaveProfile} className="mt-6" disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
               ) : (
-                <Save className="w-4 h-4 mr-2" />
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Changes
+                </>
               )}
-              Save Changes
             </Button>
           </Card>
 

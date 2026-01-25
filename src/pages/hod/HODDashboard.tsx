@@ -4,8 +4,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useHODData } from '@/hooks/useHODData';
 import { useStudents } from '@/hooks/useStudents';
 import { useReports } from '@/hooks/useReports';
-import { Users, GraduationCap, FileText, TrendingUp, Loader2 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { Users, GraduationCap, FileText, BarChart3, Loader2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useMemo } from 'react';
+
+const MONTH_LABELS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const YEAR_LABELS = ['1st', '2nd', '3rd', '4th'];
 
 export default function HODDashboard() {
   const { supabaseUser, user, departmentId } = useAuth();
@@ -13,11 +21,27 @@ export default function HODDashboard() {
   const { students } = useStudents(departmentId);
   const { reports } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
 
-  // Generate attendance data from students
-  const attendanceData = students.slice(0, 8).map(s => ({
-    name: s.name.split(' ')[0].substring(0, 6),
-    attendance: s.attendance || 0,
-  }));
+  // Get students by year
+  const studentsByYear = useMemo(() => {
+    return {
+      1: students.filter(s => s.year === 1),
+      2: students.filter(s => s.year === 2),
+      3: students.filter(s => s.year === 3),
+      4: students.filter(s => s.year === 4),
+    };
+  }, [students]);
+
+  // Year-wise average attendance (like Teacher Dashboard)
+  const yearWiseAttendance = useMemo(() => {
+    return [1, 2, 3, 4].map(year => {
+      const yearStudents = studentsByYear[year as keyof typeof studentsByYear];
+      if (yearStudents.length === 0) return { year, avg: 0 };
+      const avg = Math.round(
+        yearStudents.reduce((acc, s) => acc + (s.attendance || 0), 0) / yearStudents.length
+      );
+      return { year, avg };
+    });
+  }, [studentsByYear]);
 
   // Generate teacher workload data
   const teacherWorkload = teachers.map(t => ({
@@ -57,21 +81,35 @@ export default function HODDashboard() {
           value={stats.pendingReports}
           icon={<FileText className="w-6 h-6 text-primary" />}
         />
-        <StatCard
-          title="Avg Attendance"
-          value={`${stats.avgAttendance.toFixed(1)}%`}
-          icon={<TrendingUp className="w-6 h-6 text-primary" />}
-          variant="secondary"
-        />
+        {/* Year-wise Average Attendance Card (like Teacher Dashboard) */}
+        <div className="bg-card rounded-xl shadow-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm font-medium text-muted-foreground">Avg. Attendance (Year-wise)</span>
+            <BarChart3 className="w-6 h-6 text-primary" />
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {yearWiseAttendance.map((item, idx) => (
+              <div key={item.year} className="text-center">
+                <p className="text-xs text-muted-foreground mb-1">{YEAR_LABELS[idx]} Year</p>
+                <p className="text-lg font-bold text-foreground">
+                  {`${item.avg}%`}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-card rounded-xl shadow-card p-6">
-          <h3 className="font-display text-lg font-semibold mb-4">Student Attendance Overview</h3>
-          {attendanceData.length > 0 ? (
+          <h3 className="font-display text-lg font-semibold mb-4">Student Distribution by Year</h3>
+          {students.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={attendanceData}>
+              <BarChart data={YEAR_LABELS.map((label, idx) => ({
+                name: label,
+                students: studentsByYear[(idx + 1) as keyof typeof studentsByYear].length,
+              }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
@@ -82,7 +120,7 @@ export default function HODDashboard() {
                     borderRadius: '8px'
                   }} 
                 />
-                <Bar dataKey="attendance" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Attendance %" />
+                <Bar dataKey="students" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Students" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
