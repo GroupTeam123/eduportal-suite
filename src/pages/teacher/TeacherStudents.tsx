@@ -672,12 +672,12 @@ export default function TeacherStudents() {
                 </div>
               );
             })()}
-            <div className="flex justify-end gap-3 pt-4">
+            <div className="flex justify-end gap-3 pt-4 border-t mt-4">
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                {editingStudent ? 'Update' : 'Add'} Student
+              <Button type="submit" className={editingStudent ? 'bg-primary hover:bg-primary/90' : ''}>
+                {editingStudent ? 'Update Student' : 'Add Student'}
               </Button>
             </div>
             </form>
