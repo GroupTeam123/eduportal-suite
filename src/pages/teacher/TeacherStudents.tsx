@@ -58,6 +58,29 @@ export default function TeacherStudents() {
     custom_fields: {},
     marks: {},
   });
+  const [monthlyAttendance, setMonthlyAttendance] = useState<Record<string, string>>({});
+
+  const MONTH_LABELS = [
+    'Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6',
+    'Month 7', 'Month 8', 'Month 9', 'Month 10', 'Month 11', 'Month 12'
+  ];
+
+  // Get all monthly attendance columns that have data in any student
+  const getMonthlyColumnsWithData = (yearStudents: StudentRecord[]) => {
+    const monthsWithData = new Set<string>();
+    yearStudents.forEach(student => {
+      const customFields = student.custom_fields as Record<string, unknown> | null;
+      if (customFields) {
+        MONTH_LABELS.forEach(month => {
+          const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+          if (customFields[key] !== undefined && customFields[key] !== null && customFields[key] !== '') {
+            monthsWithData.add(month);
+          }
+        });
+      }
+    });
+    return MONTH_LABELS.filter(month => monthsWithData.has(month));
+  };
   const { toast } = useToast();
 
   // Filter students by year
@@ -88,6 +111,7 @@ export default function TeacherStudents() {
       custom_fields: {},
       marks: {},
     });
+    setMonthlyAttendance({});
     setIsAddDialogOpen(true);
   };
 
@@ -106,6 +130,18 @@ export default function TeacherStudents() {
       custom_fields: student.custom_fields || {},
       marks: student.marks || {},
     });
+    // Extract monthly attendance from custom_fields
+    const existingMonthly: Record<string, string> = {};
+    const customFields = student.custom_fields as Record<string, unknown> | null;
+    if (customFields) {
+      MONTH_LABELS.forEach(month => {
+        const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+        if (customFields[key] !== undefined && customFields[key] !== null) {
+          existingMonthly[key] = String(customFields[key]);
+        }
+      });
+    }
+    setMonthlyAttendance(existingMonthly);
     setIsAddDialogOpen(true);
   };
 
@@ -119,12 +155,26 @@ export default function TeacherStudents() {
     e.preventDefault();
     if (!supabaseUser) return;
 
+    // Merge monthly attendance into custom_fields
+    const updatedCustomFields = { ...(formData.custom_fields || {}) };
+    Object.entries(monthlyAttendance).forEach(([key, value]) => {
+      if (value && value.trim() !== '') {
+        updatedCustomFields[key] = parseFloat(value) || 0;
+      }
+    });
+
+    const dataToSave = {
+      ...formData,
+      custom_fields: updatedCustomFields,
+    };
+
     if (editingStudent) {
-      await updateStudent(editingStudent.id, formData);
+      await updateStudent(editingStudent.id, dataToSave);
     } else {
-      await addStudent(formData, supabaseUser.id);
+      await addStudent(dataToSave, supabaseUser.id);
     }
     setIsAddDialogOpen(false);
+    setMonthlyAttendance({});
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,6 +265,8 @@ export default function TeacherStudents() {
   };
 
   const renderStudentTable = (yearStudents: StudentRecord[], year: number) => {
+    const monthlyColumnsWithData = getMonthlyColumnsWithData(yearStudents);
+    
     return (
       <div className="space-y-4">
         <div className="flex justify-end">
@@ -240,7 +292,11 @@ export default function TeacherStudents() {
                   <TableHead className="font-semibold">Name</TableHead>
                   <TableHead className="font-semibold">Email</TableHead>
                   <TableHead className="font-semibold">Contact</TableHead>
-                  <TableHead className="font-semibold">Attendance</TableHead>
+                  {monthlyColumnsWithData.map(month => (
+                    <TableHead key={month} className="font-semibold">
+                      {month} Att.
+                    </TableHead>
+                  ))}
                   {customColumns.map(col => (
                     <TableHead key={col.id} className="font-semibold">
                       <div className="flex items-center gap-2">
@@ -260,48 +316,58 @@ export default function TeacherStudents() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {yearStudents.map((student) => (
-                  <TableRow key={student.id} className="hover:bg-muted/30">
-                    <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
-                    <TableCell>{student.name}</TableCell>
-                    <TableCell>{student.email || '-'}</TableCell>
-                    <TableCell>{student.contact || '-'}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              (student.attendance || 0) >= 90 ? 'bg-success' :
-                              (student.attendance || 0) >= 75 ? 'bg-warning' :
-                              'bg-destructive'
-                            }`}
-                            style={{ width: `${student.attendance || 0}%` }}
+                {yearStudents.map((student) => {
+                  const customFields = student.custom_fields as Record<string, unknown> | null;
+                  return (
+                    <TableRow key={student.id} className="hover:bg-muted/30">
+                      <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
+                      <TableCell>{student.name}</TableCell>
+                      <TableCell>{student.email || '-'}</TableCell>
+                      <TableCell>{student.contact || '-'}</TableCell>
+                      {monthlyColumnsWithData.map(month => {
+                        const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+                        const value = customFields?.[key];
+                        const numValue = typeof value === 'number' ? value : (value ? parseFloat(String(value)) : 0);
+                        return (
+                          <TableCell key={month}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-12 h-2 bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    numValue >= 90 ? 'bg-success' :
+                                    numValue >= 75 ? 'bg-warning' :
+                                    'bg-destructive'
+                                  }`}
+                                  style={{ width: `${Math.min(100, numValue)}%` }}
+                                />
+                              </div>
+                              <span className="text-sm">{numValue || 0}%</span>
+                            </div>
+                          </TableCell>
+                        );
+                      })}
+                      {customColumns.map(col => (
+                        <TableCell key={col.id}>
+                          <Input
+                            className="h-8 w-24"
+                            defaultValue={(customFields as Record<string, string> | null)?.[col.name] || ''}
+                            onBlur={(e) => handleUpdateCustomField(student.id, col.name, e.target.value)}
                           />
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(student)}>
+                            Edit
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(student)}>
+                            Delete
+                          </Button>
                         </div>
-                        <span className="text-sm">{student.attendance || 0}%</span>
-                      </div>
-                    </TableCell>
-                    {customColumns.map(col => (
-                      <TableCell key={col.id}>
-                        <Input
-                          className="h-8 w-24"
-                          defaultValue={(student.custom_fields as Record<string, string> | null)?.[col.name] || ''}
-                          onBlur={(e) => handleUpdateCustomField(student.id, col.name, e.target.value)}
-                        />
                       </TableCell>
-                    ))}
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(student)}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(student)}>
-                          Delete
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -423,27 +489,45 @@ export default function TeacherStudents() {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="contact">Contact Number</Label>
-                <Input
-                  id="contact"
-                  type="number"
-                  value={formData.contact || ''}
-                  onChange={(e) => setFormData({ ...formData, contact: e.target.value ? parseInt(e.target.value) : undefined })}
-                />
+            <div>
+              <Label htmlFor="contact">Contact Number</Label>
+              <Input
+                id="contact"
+                type="number"
+                value={formData.contact || ''}
+                onChange={(e) => setFormData({ ...formData, contact: e.target.value ? parseInt(e.target.value) : undefined })}
+              />
+            </div>
+            
+            {/* Monthly Attendance Section */}
+            <div className="space-y-3">
+              <Label className="text-sm font-medium">Monthly Attendance (Optional)</Label>
+              <div className="grid grid-cols-3 gap-3 max-h-48 overflow-y-auto p-2 border rounded-md bg-muted/30">
+                {MONTH_LABELS.map((month, idx) => {
+                  const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+                  return (
+                    <div key={month} className="space-y-1">
+                      <Label htmlFor={key} className="text-xs text-muted-foreground">{month}</Label>
+                      <Input
+                        id={key}
+                        type="number"
+                        min={0}
+                        max={100}
+                        placeholder="%"
+                        className="h-8"
+                        value={monthlyAttendance[key] || ''}
+                        onChange={(e) => setMonthlyAttendance(prev => ({
+                          ...prev,
+                          [key]: e.target.value
+                        }))}
+                      />
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <Label htmlFor="attendance">Attendance (%)</Label>
-                <Input
-                  id="attendance"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={formData.attendance || 0}
-                  onChange={(e) => setFormData({ ...formData, attendance: parseInt(e.target.value) || 0 })}
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Only months with data will appear as columns in the table.
+              </p>
             </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
