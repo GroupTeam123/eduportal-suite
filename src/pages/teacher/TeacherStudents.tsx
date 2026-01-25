@@ -636,21 +636,29 @@ export default function TeacherStudents() {
               </p>
             </div>
             
-            {/* Custom Fields Section - only show if there are saved columns */}
+            {/* Custom Fields Section - show ALL columns present in table */}
             {(() => {
               const allStudents = getStudentsByYear(formData.year || 1);
               const savedCols = getSavedColumnsFromData(allStudents);
-              // Also add columns from current session that are saved
-              const sessionSavedCols = customColumns.filter(c => c.isSaved).map(c => c.name);
-              const allSavedCols = [...new Set([...savedCols, ...sessionSavedCols])];
+              // Add columns from current session (both saved and unsaved)
+              const sessionCols = customColumns.map(c => c.name);
+              // Also include any custom fields that exist on the current student being edited
+              const studentCustomFields = editingStudent?.custom_fields as Record<string, unknown> | null;
+              const studentCols = studentCustomFields ? Object.keys(studentCustomFields).filter(key => {
+                // Exclude monthly attendance keys
+                const monthKeys = MONTH_LABELS.map(m => m.toLowerCase() + '_attendance');
+                return !monthKeys.includes(key);
+              }) : [];
               
-              if (allSavedCols.length === 0) return null;
+              const allCols = [...new Set([...savedCols, ...sessionCols, ...studentCols])];
+              
+              if (allCols.length === 0) return null;
               
               return (
                 <div className="space-y-3">
                   <Label className="text-sm font-medium">Custom Fields</Label>
                   <div className="grid grid-cols-2 gap-3 p-2 border rounded-md bg-muted/30">
-                    {allSavedCols.map(colName => (
+                    {allCols.map(colName => (
                       <div key={colName} className="space-y-1">
                         <Label htmlFor={`custom-${colName}`} className="text-xs text-muted-foreground capitalize">
                           {colName.replace(/_/g, ' ')}
