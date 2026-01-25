@@ -146,9 +146,10 @@ export default function TeacherStudents() {
     setImportState(prev => ({ ...prev, status: 'importing', progress: 0 }));
 
     const data = importState.result.data;
+    const targetYear = parseInt(selectedYear);
     
-    // Use upsert to match by name/student_id
-    await upsertStudents(data, supabaseUser.id);
+    // Use upsert to match by name/student_id, assign to selected year tab
+    await upsertStudents(data, supabaseUser.id, targetYear);
 
     setImportState({ status: 'complete', result: importState.result, progress: 100 });
 
