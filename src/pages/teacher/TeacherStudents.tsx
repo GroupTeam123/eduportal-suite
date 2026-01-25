@@ -61,8 +61,8 @@ export default function TeacherStudents() {
   const [monthlyAttendance, setMonthlyAttendance] = useState<Record<string, string>>({});
 
   const MONTH_LABELS = [
-    'Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6',
-    'Month 7', 'Month 8', 'Month 9', 'Month 10', 'Month 11', 'Month 12'
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
   // Get all monthly attendance columns that have data in any student
