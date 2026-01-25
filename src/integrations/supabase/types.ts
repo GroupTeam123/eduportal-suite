@@ -176,43 +176,55 @@ export type Database = {
           attendance: number | null
           contact: number | null
           created_at: string
+          custom_fields: Json | null
           department_id: string
           email: string | null
           guardian_name: string | null
           guardian_phone: string | null
           id: string
+          marks: Json | null
           name: string
           notes: string | null
+          student_id: string | null
           teacher_user_id: string
           updated_at: string
+          year: number | null
         }
         Insert: {
           attendance?: number | null
           contact?: number | null
           created_at?: string
+          custom_fields?: Json | null
           department_id: string
           email?: string | null
           guardian_name?: string | null
           guardian_phone?: string | null
           id?: string
+          marks?: Json | null
           name: string
           notes?: string | null
+          student_id?: string | null
           teacher_user_id: string
           updated_at?: string
+          year?: number | null
         }
         Update: {
           attendance?: number | null
           contact?: number | null
           created_at?: string
+          custom_fields?: Json | null
           department_id?: string
           email?: string | null
           guardian_name?: string | null
           guardian_phone?: string | null
           id?: string
+          marks?: Json | null
           name?: string
           notes?: string | null
+          student_id?: string | null
           teacher_user_id?: string
           updated_at?: string
+          year?: number | null
         }
         Relationships: [
           {

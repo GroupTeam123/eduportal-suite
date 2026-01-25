@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Json } from '@/integrations/supabase/types';
 
 export interface StudentRecord {
   id: string;
@@ -13,6 +14,10 @@ export interface StudentRecord {
   guardian_name: string | null;
   guardian_phone: string | null;
   notes: string | null;
+  year: number | null;
+  student_id: string | null;
+  custom_fields: Record<string, unknown> | null;
+  marks: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -25,6 +30,10 @@ export interface NewStudentRecord {
   guardian_name?: string;
   guardian_phone?: string;
   notes?: string;
+  year?: number;
+  student_id?: string;
+  custom_fields?: Record<string, unknown>;
+  marks?: Record<string, unknown>;
 }
 
 export function useStudents(departmentId: string | null) {
@@ -47,7 +56,15 @@ export function useStudents(departmentId: string | null) {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setStudents(data || []);
+      
+      // Transform the data to ensure proper typing
+      const transformedData: StudentRecord[] = (data || []).map(record => ({
+        ...record,
+        custom_fields: record.custom_fields as Record<string, unknown> | null,
+        marks: record.marks as Record<string, unknown> | null,
+      }));
+      
+      setStudents(transformedData);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch students';
       setError(message);
@@ -78,18 +95,26 @@ export function useStudents(departmentId: string | null) {
           ...student,
           teacher_user_id: teacherUserId,
           department_id: departmentId,
+          custom_fields: (student.custom_fields || {}) as Json,
+          marks: (student.marks || {}) as Json,
         })
         .select()
         .single();
 
       if (error) throw error;
 
-      setStudents(prev => [data, ...prev]);
+      const transformedData: StudentRecord = {
+        ...data,
+        custom_fields: data.custom_fields as Record<string, unknown> | null,
+        marks: data.marks as Record<string, unknown> | null,
+      };
+
+      setStudents(prev => [transformedData, ...prev]);
       toast({
         title: 'Student Added',
         description: `${student.name} has been added successfully.`,
       });
-      return data;
+      return transformedData;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add student';
       toast({
@@ -103,21 +128,35 @@ export function useStudents(departmentId: string | null) {
 
   const updateStudent = async (id: string, updates: Partial<NewStudentRecord>) => {
     try {
+      const updatePayload: Record<string, unknown> = { ...updates };
+      if (updates.custom_fields) {
+        updatePayload.custom_fields = updates.custom_fields as Json;
+      }
+      if (updates.marks) {
+        updatePayload.marks = updates.marks as Json;
+      }
+
       const { data, error } = await supabase
         .from('student_records')
-        .update(updates)
+        .update(updatePayload)
         .eq('id', id)
         .select()
         .single();
 
       if (error) throw error;
 
-      setStudents(prev => prev.map(s => s.id === id ? data : s));
+      const transformedData: StudentRecord = {
+        ...data,
+        custom_fields: data.custom_fields as Record<string, unknown> | null,
+        marks: data.marks as Record<string, unknown> | null,
+      };
+
+      setStudents(prev => prev.map(s => s.id === id ? transformedData : s));
       toast({
         title: 'Student Updated',
         description: 'Student record has been updated.',
       });
-      return data;
+      return transformedData;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update student';
       toast({
@@ -170,6 +209,8 @@ export function useStudents(departmentId: string | null) {
         ...s,
         teacher_user_id: teacherUserId,
         department_id: departmentId,
+        custom_fields: (s.custom_fields || {}) as Json,
+        marks: (s.marks || {}) as Json,
       }));
 
       const { data, error } = await supabase
@@ -179,12 +220,18 @@ export function useStudents(departmentId: string | null) {
 
       if (error) throw error;
 
-      setStudents(prev => [...(data || []), ...prev]);
+      const transformedData: StudentRecord[] = (data || []).map(record => ({
+        ...record,
+        custom_fields: record.custom_fields as Record<string, unknown> | null,
+        marks: record.marks as Record<string, unknown> | null,
+      }));
+
+      setStudents(prev => [...transformedData, ...prev]);
       toast({
         title: 'Import Successful',
         description: `${data?.length || 0} students imported.`,
       });
-      return data || [];
+      return transformedData;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to import students';
       toast({
@@ -196,6 +243,82 @@ export function useStudents(departmentId: string | null) {
     }
   };
 
+  // Upsert students by matching name AND student_id
+  const upsertStudents = async (studentsData: NewStudentRecord[], teacherUserId: string) => {
+    if (!departmentId) {
+      toast({
+        title: 'Error',
+        description: 'No department assigned.',
+        variant: 'destructive',
+      });
+      return { inserted: 0, updated: 0 };
+    }
+
+    let insertedCount = 0;
+    let updatedCount = 0;
+
+    for (const studentData of studentsData) {
+      try {
+        // Try to find existing student by name AND student_id
+        let existingStudent: StudentRecord | null = null;
+        
+        if (studentData.student_id) {
+          const { data } = await supabase
+            .from('student_records')
+            .select('*')
+            .eq('department_id', departmentId)
+            .eq('student_id', studentData.student_id)
+            .maybeSingle();
+          
+          if (data) {
+            existingStudent = {
+              ...data,
+              custom_fields: data.custom_fields as Record<string, unknown> | null,
+              marks: data.marks as Record<string, unknown> | null,
+            };
+          }
+        }
+
+        // If no match by student_id, try matching by exact name
+        if (!existingStudent && studentData.name) {
+          const { data } = await supabase
+            .from('student_records')
+            .select('*')
+            .eq('department_id', departmentId)
+            .eq('name', studentData.name)
+            .maybeSingle();
+          
+          if (data) {
+            existingStudent = {
+              ...data,
+              custom_fields: data.custom_fields as Record<string, unknown> | null,
+              marks: data.marks as Record<string, unknown> | null,
+            };
+          }
+        }
+
+        if (existingStudent) {
+          // Update existing record
+          await updateStudent(existingStudent.id, studentData);
+          updatedCount++;
+        } else {
+          // Insert new record
+          await addStudent(studentData, teacherUserId);
+          insertedCount++;
+        }
+      } catch (err) {
+        console.error('Error upserting student:', err);
+      }
+    }
+
+    toast({
+      title: 'Import Complete',
+      description: `${insertedCount} added, ${updatedCount} updated.`,
+    });
+
+    return { inserted: insertedCount, updated: updatedCount };
+  };
+
   return {
     students,
     loading,
@@ -204,6 +327,7 @@ export function useStudents(departmentId: string | null) {
     updateStudent,
     deleteStudent,
     importStudents,
+    upsertStudents,
     refetch: fetchStudents,
   };
 }
