@@ -56,9 +56,15 @@ export function DashboardSidebar() {
     ? hodNav 
     : principalNav;
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Navigate anyway even if there's an error
+      navigate('/login');
+    }
   };
 
   return (
