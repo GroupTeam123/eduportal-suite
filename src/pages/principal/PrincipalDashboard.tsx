@@ -12,7 +12,7 @@ export default function PrincipalDashboard() {
   const { reports } = useReports(supabaseUser?.id || null, user?.role || null, null);
 
   // Department data for chart
-  const departmentData = departments.slice(0, 6).map(d => ({
+  const departmentData = departments.map(d => ({
     name: d.name.length > 10 ? d.name.substring(0, 10) + '...' : d.name,
     students: d.student_count,
     teachers: d.teacher_count * 10, // Scale for visualization
