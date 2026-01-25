@@ -135,9 +135,9 @@ export default function PrincipalDashboard() {
       </div>
 
       {/* Department Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {departments.length > 0 ? (
-          departments.slice(0, 6).map((dept) => (
+          departments.map((dept) => (
             <div key={dept.id} className="bg-card rounded-xl shadow-card p-6 hover:shadow-lg transition-shadow">
               <div className="flex items-start justify-between mb-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
