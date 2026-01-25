@@ -243,8 +243,8 @@ export function useStudents(departmentId: string | null) {
     }
   };
 
-  // Upsert students by matching name AND student_id
-  const upsertStudents = async (studentsData: NewStudentRecord[], teacherUserId: string) => {
+  // Upsert students by matching name AND student_id, assign to selected year
+  const upsertStudents = async (studentsData: NewStudentRecord[], teacherUserId: string, targetYear?: number) => {
     if (!departmentId) {
       toast({
         title: 'Error',
@@ -298,12 +298,14 @@ export function useStudents(departmentId: string | null) {
         }
 
         if (existingStudent) {
-          // Update existing record
-          await updateStudent(existingStudent.id, studentData);
+          // Update existing record with the target year if specified
+          const updateData = targetYear ? { ...studentData, year: targetYear } : studentData;
+          await updateStudent(existingStudent.id, updateData);
           updatedCount++;
         } else {
-          // Insert new record
-          await addStudent(studentData, teacherUserId);
+          // Insert new record with the target year if specified
+          const insertData = targetYear ? { ...studentData, year: targetYear } : studentData;
+          await addStudent(insertData, teacherUserId);
           insertedCount++;
         }
       } catch (err) {
