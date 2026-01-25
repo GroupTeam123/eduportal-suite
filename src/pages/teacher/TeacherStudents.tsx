@@ -241,7 +241,6 @@ export default function TeacherStudents() {
               <TableHead className="font-semibold">Email</TableHead>
               <TableHead className="font-semibold">Contact</TableHead>
               <TableHead className="font-semibold">Attendance</TableHead>
-              <TableHead className="font-semibold">Guardian</TableHead>
               {customColumns.map(col => (
                 <TableHead key={col.id} className="font-semibold">
                   <div className="flex items-center gap-2">
@@ -282,7 +281,6 @@ export default function TeacherStudents() {
                     <span className="text-sm">{student.attendance || 0}%</span>
                   </div>
                 </TableCell>
-                <TableCell>{student.guardian_name || '-'}</TableCell>
                 {customColumns.map(col => (
                   <TableCell key={col.id}>
                     <Input
@@ -339,7 +337,6 @@ export default function TeacherStudents() {
               <TableHead className="font-semibold">Email</TableHead>
               <TableHead className="font-semibold">Contact</TableHead>
               <TableHead className="font-semibold">Attendance</TableHead>
-              <TableHead className="font-semibold">Guardian</TableHead>
               <TableHead className="font-semibold">Year</TableHead>
               <TableHead className="font-semibold text-right">Actions</TableHead>
             </TableRow>
@@ -366,7 +363,6 @@ export default function TeacherStudents() {
                     <span className="text-sm">{student.attendance || 0}%</span>
                   </div>
                 </TableCell>
-                <TableCell>{student.guardian_name || '-'}</TableCell>
                 <TableCell>{student.year ? `${student.year}${student.year === 1 ? 'st' : student.year === 2 ? 'nd' : student.year === 3 ? 'rd' : 'th'} Year` : '-'}</TableCell>
                 <TableCell className="text-right">
                   <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteImported(student)}>
@@ -525,32 +521,6 @@ export default function TeacherStudents() {
                   onChange={(e) => setFormData({ ...formData, attendance: parseInt(e.target.value) || 0 })}
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="guardian_name">Guardian Name</Label>
-                <Input
-                  id="guardian_name"
-                  value={formData.guardian_name || ''}
-                  onChange={(e) => setFormData({ ...formData, guardian_name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="guardian_phone">Guardian Phone</Label>
-                <Input
-                  id="guardian_phone"
-                  value={formData.guardian_phone || ''}
-                  onChange={(e) => setFormData({ ...formData, guardian_phone: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <Input
-                id="notes"
-                value={formData.notes || ''}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              />
             </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
