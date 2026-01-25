@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useStudents, StudentRecord, NewStudentRecord } from '@/hooks/useStudents';
-import { useImportedStudents, ImportedStudent, NewImportedStudent } from '@/hooks/useImportedStudents';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,14 +33,7 @@ interface CustomColumn {
 
 export default function TeacherStudents() {
   const { user, supabaseUser, departmentId } = useAuth();
-  const { students, loading, addStudent, updateStudent, deleteStudent } = useStudents(departmentId);
-  const { 
-    importedStudents, 
-    loading: importedLoading, 
-    bulkImportStudents,
-    updateImportedStudent,
-    deleteImportedStudent 
-  } = useImportedStudents(departmentId);
+  const { students, loading, addStudent, updateStudent, deleteStudent, importStudents } = useStudents(departmentId);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
@@ -162,17 +154,21 @@ export default function TeacherStudents() {
     setImportState(prev => ({ ...prev, status: 'importing', progress: 0 }));
 
     const data = importState.result.data;
+    const currentYear = parseInt(selectedTab);
     
-    // Import to separate imported_students table
-    await bulkImportStudents(data as NewImportedStudent[], supabaseUser.id);
+    // Import directly to student_records with the current year
+    const studentsWithYear = data.map(s => ({
+      ...s,
+      year: currentYear,
+    }));
+    
+    await importStudents(studentsWithYear as NewStudentRecord[], supabaseUser.id);
 
     setImportState({ status: 'complete', result: importState.result, progress: 100 });
 
     setTimeout(() => {
       setIsImportDialogOpen(false);
       setImportState({ status: 'idle', result: null, progress: 0 });
-      // Switch to imported tab to show results
-      setSelectedTab('imported');
     }, 2000);
   };
 
@@ -314,76 +310,8 @@ export default function TeacherStudents() {
     );
   };
 
-  const handleDeleteImported = async (student: ImportedStudent) => {
-    if (confirm(`Are you sure you want to delete ${student.name} from imported records?`)) {
-      await deleteImportedStudent(student.id);
-    }
-  };
 
-  const renderImportedTable = () => {
-    if (importedStudents.length === 0) {
-      return (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="mb-4">No imported students. Import an Excel file to add data.</p>
-          <Button onClick={() => setIsImportDialogOpen(true)}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import Excel
-          </Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="font-semibold">Student ID</TableHead>
-              <TableHead className="font-semibold">Name</TableHead>
-              <TableHead className="font-semibold">Email</TableHead>
-              <TableHead className="font-semibold">Contact</TableHead>
-              <TableHead className="font-semibold">Attendance</TableHead>
-              <TableHead className="font-semibold">Year</TableHead>
-              <TableHead className="font-semibold text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {importedStudents.map((student) => (
-              <TableRow key={student.id} className="hover:bg-muted/30">
-                <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
-                <TableCell>{student.name}</TableCell>
-                <TableCell>{student.email || '-'}</TableCell>
-                <TableCell>{student.contact || '-'}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${
-                          (student.attendance || 0) >= 90 ? 'bg-success' :
-                          (student.attendance || 0) >= 75 ? 'bg-warning' :
-                          'bg-destructive'
-                        }`}
-                        style={{ width: `${student.attendance || 0}%` }}
-                      />
-                    </div>
-                    <span className="text-sm">{student.attendance || 0}%</span>
-                  </div>
-                </TableCell>
-                <TableCell>{student.year ? `${student.year}${student.year === 1 ? 'st' : student.year === 2 ? 'nd' : student.year === 3 ? 'rd' : 'th'} Year` : '-'}</TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteImported(student)}>
-                    Delete
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    );
-  };
-
-  if (loading || importedLoading) {
+  if (loading) {
     return (
       <DashboardLayout title="Student Management" subtitle="Loading...">
         <div className="flex items-center justify-center h-64">
@@ -431,9 +359,6 @@ export default function TeacherStudents() {
                 {label} ({getStudentsByYear(idx + 1).length})
               </TabsTrigger>
             ))}
-            <TabsTrigger value="imported" className="bg-primary/10">
-              Imported ({importedStudents.length})
-            </TabsTrigger>
           </TabsList>
 
           {YEAR_LABELS.map((_, idx) => (
@@ -441,10 +366,6 @@ export default function TeacherStudents() {
               {renderStudentTable(getStudentsByYear(idx + 1), idx + 1)}
             </TabsContent>
           ))}
-          
-          <TabsContent value="imported">
-            {renderImportedTable()}
-          </TabsContent>
         </Tabs>
       </Card>
 
