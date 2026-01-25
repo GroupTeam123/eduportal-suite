@@ -539,12 +539,13 @@ export default function TeacherStudents() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>{editingStudent ? 'Edit Student' : 'Add New Student'}</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 max-h-[calc(90vh-120px)] pr-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+            <ScrollArea className="flex-1 pr-4">
+              <div className="space-y-4 pb-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="student_id">Student ID / Roll No</Label>
@@ -672,7 +673,9 @@ export default function TeacherStudents() {
                 </div>
               );
             })()}
-            <div className="flex justify-end gap-3 pt-4 border-t mt-4">
+              </div>
+            </ScrollArea>
+            <div className="flex justify-end gap-3 pt-4 border-t mt-4 flex-shrink-0">
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancel
               </Button>
@@ -680,8 +683,7 @@ export default function TeacherStudents() {
                 {editingStudent ? 'Update Student' : 'Add Student'}
               </Button>
             </div>
-            </form>
-          </ScrollArea>
+          </form>
         </DialogContent>
       </Dialog>
 
