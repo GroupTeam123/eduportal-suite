@@ -72,7 +72,7 @@ export default function TeacherStudents() {
       const customFields = student.custom_fields as Record<string, unknown> | null;
       if (customFields) {
         MONTH_LABELS.forEach(month => {
-          const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+          const key = month.toLowerCase() + '_attendance';
           if (customFields[key] !== undefined && customFields[key] !== null && customFields[key] !== '') {
             monthsWithData.add(month);
           }
@@ -135,7 +135,7 @@ export default function TeacherStudents() {
     const customFields = student.custom_fields as Record<string, unknown> | null;
     if (customFields) {
       MONTH_LABELS.forEach(month => {
-        const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+        const key = month.toLowerCase() + '_attendance';
         if (customFields[key] !== undefined && customFields[key] !== null) {
           existingMonthly[key] = String(customFields[key]);
         }
@@ -264,6 +264,25 @@ export default function TeacherStudents() {
     await updateStudent(studentId, { custom_fields: updatedCustomFields });
   };
 
+  // Calculate average attendance from monthly data
+  const calculateAvgAttendance = (customFields: Record<string, unknown> | null): number => {
+    if (!customFields) return 0;
+    const monthKeys = MONTH_LABELS.map(month => month.toLowerCase() + '_attendance');
+    let total = 0;
+    let count = 0;
+    monthKeys.forEach(key => {
+      const value = customFields[key];
+      if (value !== undefined && value !== null && value !== '') {
+        const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+        if (!isNaN(numValue)) {
+          total += numValue;
+          count++;
+        }
+      }
+    });
+    return count > 0 ? Math.round(total / count) : 0;
+  };
+
   const renderStudentTable = (yearStudents: StudentRecord[], year: number) => {
     const monthlyColumnsWithData = getMonthlyColumnsWithData(yearStudents);
     
@@ -292,6 +311,7 @@ export default function TeacherStudents() {
                   <TableHead className="font-semibold">Name</TableHead>
                   <TableHead className="font-semibold">Email</TableHead>
                   <TableHead className="font-semibold">Contact</TableHead>
+                  <TableHead className="font-semibold">Attendance</TableHead>
                   {monthlyColumnsWithData.map(month => (
                     <TableHead key={month} className="font-semibold">
                       {month} Att.
@@ -318,14 +338,30 @@ export default function TeacherStudents() {
               <TableBody>
                 {yearStudents.map((student) => {
                   const customFields = student.custom_fields as Record<string, unknown> | null;
+                  const avgAttendance = calculateAvgAttendance(customFields);
                   return (
                     <TableRow key={student.id} className="hover:bg-muted/30">
                       <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
                       <TableCell>{student.name}</TableCell>
                       <TableCell>{student.email || '-'}</TableCell>
                       <TableCell>{student.contact || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                avgAttendance >= 90 ? 'bg-success' :
+                                avgAttendance >= 75 ? 'bg-warning' :
+                                'bg-destructive'
+                              }`}
+                              style={{ width: `${Math.min(100, avgAttendance)}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-medium">{avgAttendance}%</span>
+                        </div>
+                      </TableCell>
                       {monthlyColumnsWithData.map(month => {
-                        const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+                        const key = month.toLowerCase() + '_attendance';
                         const value = customFields?.[key];
                         const numValue = typeof value === 'number' ? value : (value ? parseFloat(String(value)) : 0);
                         return (
