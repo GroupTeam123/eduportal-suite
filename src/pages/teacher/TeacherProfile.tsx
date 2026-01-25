@@ -20,17 +20,22 @@ export default function TeacherProfile() {
     email: profile?.email || user?.email || '',
     phone: profile?.phone || '',
     bio: profile?.bio || '',
+    qualifications: ((profile as unknown) as Record<string, unknown>)?.qualifications as string || '',
+    years_of_experience: ((profile as unknown) as Record<string, unknown>)?.years_of_experience as number | '' || '',
   });
   const [isSaving, setIsSaving] = useState(false);
 
   // Update form when profile loads
   useState(() => {
     if (profile) {
+      const profileData = (profile as unknown) as Record<string, unknown>;
       setFormData({
         full_name: profile.full_name,
         email: profile.email || '',
         phone: profile.phone || '',
         bio: profile.bio || '',
+        qualifications: profileData?.qualifications as string || '',
+        years_of_experience: profileData?.years_of_experience as number | '' || '',
       });
     }
   });
@@ -143,6 +148,28 @@ export default function TeacherProfile() {
                   value={user?.department || 'Not assigned'}
                   disabled
                   className="mt-1.5 bg-muted"
+                />
+              </div>
+              <div>
+                <Label htmlFor="qualifications">Qualifications</Label>
+                <Input
+                  id="qualifications"
+                  value={formData.qualifications}
+                  onChange={(e) => setFormData({ ...formData, qualifications: e.target.value })}
+                  className="mt-1.5"
+                  placeholder="e.g., M.Tech, PhD"
+                />
+              </div>
+              <div>
+                <Label htmlFor="years_of_experience">Years of Experience</Label>
+                <Input
+                  id="years_of_experience"
+                  type="number"
+                  value={formData.years_of_experience}
+                  onChange={(e) => setFormData({ ...formData, years_of_experience: e.target.value ? parseInt(e.target.value) : '' })}
+                  className="mt-1.5"
+                  placeholder="e.g., 5"
+                  min={0}
                 />
               </div>
             </div>

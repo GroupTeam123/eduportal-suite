@@ -20,7 +20,6 @@ import { Json } from '@/integrations/supabase/types';
 
 const chartOptions = [
   { id: 'attendance', label: 'Attendance Analysis', icon: BarChart3 },
-  { id: 'grades', label: 'Grade Distribution', icon: PieChart },
   { id: 'performance', label: 'Performance Trend', icon: LineChart },
   { id: 'comparison', label: 'Subject Comparison', icon: TrendingUp },
 ];
@@ -48,7 +47,7 @@ export default function TeacherReports() {
   const { students } = useStudents(departmentId);
   
   const [reportTab, setReportTab] = useState<string>('class');
-  const [selectedCharts, setSelectedCharts] = useState<string[]>(['attendance', 'grades']);
+  const [selectedCharts, setSelectedCharts] = useState<string[]>(['attendance', 'performance']);
   const [reportTitle, setReportTitle] = useState('');
   const [reportContent, setReportContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
