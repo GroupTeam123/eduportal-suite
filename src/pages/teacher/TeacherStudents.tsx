@@ -288,7 +288,28 @@ export default function TeacherStudents() {
     
     return (
       <div className="space-y-4">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">
+                <Columns className="w-4 h-4 mr-2" />
+                Add Column
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 bg-background border shadow-lg">
+              <div className="space-y-3">
+                <Label>Column Name</Label>
+                <Input
+                  placeholder="e.g., Semester Marks"
+                  value={newColumnName}
+                  onChange={(e) => setNewColumnName(e.target.value)}
+                />
+                <Button size="sm" onClick={handleAddColumn} disabled={!newColumnName.trim()}>
+                  Add Column
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
             <Upload className="w-4 h-4 mr-2" />
             Import Excel
@@ -430,27 +451,6 @@ export default function TeacherStudents() {
           <Plus className="w-4 h-4 mr-2" />
           Add Student
         </Button>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline">
-              <Columns className="w-4 h-4 mr-2" />
-              Add Column
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64 bg-background border shadow-lg">
-            <div className="space-y-3">
-              <Label>Column Name</Label>
-              <Input
-                placeholder="e.g., Semester Marks"
-                value={newColumnName}
-                onChange={(e) => setNewColumnName(e.target.value)}
-              />
-              <Button size="sm" onClick={handleAddColumn} disabled={!newColumnName.trim()}>
-                Add Column
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
       </div>
 
       <Card className="p-6">
