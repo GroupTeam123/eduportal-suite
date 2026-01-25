@@ -1,17 +1,19 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { StudentRecord } from '@/hooks/useStudents';
 import { ReportRecord } from '@/hooks/useReports';
-import { Download, Send, BarChart3, PieChart, LineChart, User, Plus, X, Loader2 } from 'lucide-react';
+import { Download, Send, BarChart3, PieChart, LineChart, User, Plus, X, Loader2, ChevronsUpDown, Check } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, LineChart as RechartsLine, Line, Legend } from 'recharts';
 import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface SingleStudentReportProps {
   students: StudentRecord[];
@@ -37,6 +39,7 @@ const SUBJECT_COLORS = ['hsl(199, 89%, 48%)', 'hsl(45, 93%, 47%)', 'hsl(38, 92%,
 
 export function SingleStudentReport({ students, onCreateReport, onSubmitToHOD, userName }: SingleStudentReportProps) {
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [studentSearchOpen, setStudentSearchOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState('');
   const [reportDescription, setReportDescription] = useState('');
   const [selectedCharts, setSelectedCharts] = useState<string[]>(['attendance_pie', 'marks_bar']);
@@ -200,19 +203,55 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
         {/* Left - Configuration */}
         <div className="space-y-4">
           <div>
-            <Label>Select Student</Label>
-            <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
-              <SelectTrigger className="mt-1.5">
-                <SelectValue placeholder="Choose a student..." />
-              </SelectTrigger>
-              <SelectContent className="bg-background border shadow-lg z-50">
-                {students.map(student => (
-                  <SelectItem key={student.id} value={student.id}>
-                    {student.name} {student.student_id ? `(${student.student_id})` : ''} - Year {student.year || 1}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Search Student</Label>
+            <Popover open={studentSearchOpen} onOpenChange={setStudentSearchOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={studentSearchOpen}
+                  className="w-full justify-between mt-1.5"
+                >
+                  {selectedStudent
+                    ? `${selectedStudent.name} ${selectedStudent.student_id ? `(${selectedStudent.student_id})` : ''}`
+                    : "Search by name or ID..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0 bg-background border shadow-lg z-50" align="start">
+                <Command>
+                  <CommandInput placeholder="Search by name or student ID..." />
+                  <CommandList>
+                    <CommandEmpty>No student found.</CommandEmpty>
+                    <CommandGroup>
+                      {students.map(student => (
+                        <CommandItem
+                          key={student.id}
+                          value={`${student.name} ${student.student_id || ''}`}
+                          onSelect={() => {
+                            setSelectedStudentId(student.id);
+                            setStudentSearchOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedStudentId === student.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <div className="flex flex-col">
+                            <span>{student.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {student.student_id ? `ID: ${student.student_id}` : 'No ID'} • Year {student.year || 1}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {selectedStudent && (

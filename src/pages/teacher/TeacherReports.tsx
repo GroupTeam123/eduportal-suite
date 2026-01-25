@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useReports, ReportRecord } from '@/hooks/useReports';
 import { useStudents } from '@/hooks/useStudents';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,10 +52,16 @@ export default function TeacherReports() {
   const [reportTitle, setReportTitle] = useState('');
   const [reportContent, setReportContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<string>('all');
   const { toast } = useToast();
 
-  // Generate attendance data from actual students
-  const attendanceData = students.slice(0, 8).map(s => ({ 
+  // Filter students by selected year
+  const filteredStudents = selectedYear === 'all' 
+    ? students 
+    : students.filter(s => s.year === parseInt(selectedYear));
+
+  // Generate attendance data from filtered students
+  const attendanceData = filteredStudents.slice(0, 8).map(s => ({ 
     name: s.name.split(' ')[0].substring(0, 6), 
     attendance: s.attendance || 0 
   }));
@@ -89,6 +96,7 @@ export default function TeacherReports() {
     
     const chartData = {
       type: 'class_report',
+      selectedYear,
       selectedCharts,
       attendanceData,
       gradeData,
@@ -115,13 +123,13 @@ export default function TeacherReports() {
   };
 
   const handleDownloadPDF = (report?: ReportRecord) => {
-    // Calculate summary from students
-    const totalStudents = students.length;
-    const avgAttendance = students.length > 0 
-      ? students.reduce((sum, s) => sum + (s.attendance || 0), 0) / students.length 
+    // Calculate summary from filtered students
+    const totalStudents = filteredStudents.length;
+    const avgAttendance = filteredStudents.length > 0 
+      ? filteredStudents.reduce((sum, s) => sum + (s.attendance || 0), 0) / filteredStudents.length 
       : 0;
-    const highPerformers = students.filter(s => (s.attendance || 0) >= 90).length;
-    const lowAttendance = students.filter(s => (s.attendance || 0) < 75).length;
+    const highPerformers = filteredStudents.filter(s => (s.attendance || 0) >= 90).length;
+    const lowAttendance = filteredStudents.filter(s => (s.attendance || 0) < 75).length;
 
     // Use report data if provided, otherwise use current preview
     const chartData = report?.chart_data as Record<string, unknown> | null;
@@ -151,7 +159,7 @@ export default function TeacherReports() {
           { subject: 'Networks', avg: 80 },
         ] : undefined,
       },
-      students: students.slice(0, 30).map(s => ({
+      students: filteredStudents.slice(0, 30).map(s => ({
         name: s.name,
         email: s.email || undefined,
         attendance: s.attendance || undefined,
@@ -241,6 +249,25 @@ export default function TeacherReports() {
                 <h3 className="font-display text-lg font-semibold mb-4">Report Configuration</h3>
                 
                 <div className="space-y-4">
+                  <div>
+                    <Label>Select Year</Label>
+                    <Select value={selectedYear} onValueChange={setSelectedYear}>
+                      <SelectTrigger className="mt-1.5">
+                        <SelectValue placeholder="Select year..." />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background border shadow-lg z-50">
+                        <SelectItem value="all">All Years</SelectItem>
+                        <SelectItem value="1">1st Year</SelectItem>
+                        <SelectItem value="2">2nd Year</SelectItem>
+                        <SelectItem value="3">3rd Year</SelectItem>
+                        <SelectItem value="4">4th Year</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''} selected
+                    </p>
+                  </div>
+
                   <div>
                     <Label htmlFor="title">Report Title</Label>
                     <Input
