@@ -2,6 +2,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/ui/stat-card';
 import { mockStudents, mockReports } from '@/data/mockData';
 import { Users, FileText, BarChart3, TrendingUp } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const attendanceData = [
@@ -22,10 +23,11 @@ const gradeDistribution = [
 ];
 
 export default function TeacherDashboard() {
+  const { user } = useAuth();
   const avgAttendance = Math.round(mockStudents.reduce((acc, s) => acc + s.attendance, 0) / mockStudents.length);
   
   return (
-    <DashboardLayout title="Teacher Dashboard" subtitle="Welcome back, Dr. Sarah Johnson">
+    <DashboardLayout title="Teacher Dashboard" subtitle={`Welcome back, ${user?.name || 'Teacher'}`}>
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard
