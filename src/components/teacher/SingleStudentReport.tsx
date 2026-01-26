@@ -173,10 +173,18 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
       subjectMarks: subjectMarks.filter(s => s.subject).map(s => ({ subject: s.subject, marks: s.marks, outOf: s.outOf })),
       monthlyAttendance: (() => {
         const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-        const customFields = selectedStudent.custom_fields as Record<string, unknown> || {};
+        const studentCustomFields = selectedStudent.custom_fields as Record<string, unknown> || {};
         return months
-          .filter(month => customFields[month] !== undefined && customFields[month] !== null)
-          .map(month => ({ month: month.substring(0, 3), attendance: Number(customFields[month]) || 0 }));
+          .map(month => {
+            // Check for both patterns: "January" or "january_attendance"
+            const directValue = studentCustomFields[month];
+            const snakeCaseKey = `${month.toLowerCase()}_attendance`;
+            const snakeCaseValue = studentCustomFields[snakeCaseKey];
+            const value = directValue ?? snakeCaseValue;
+            return { month, value };
+          })
+          .filter(item => item.value !== undefined && item.value !== null)
+          .map(item => ({ month: item.month.substring(0, 3), attendance: Number(item.value) || 0 }));
       })(),
       progressData: progressData,
       selectedCharts: selectedCharts,
@@ -441,12 +449,20 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
                       <ResponsiveContainer width="100%" height={160}>
                         <BarChart data={(() => {
                           const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                          const customFields = selectedStudent.custom_fields as Record<string, unknown> || {};
+                          const studentCustomFields = selectedStudent.custom_fields as Record<string, unknown> || {};
                           return months
-                            .filter(month => customFields[month] !== undefined && customFields[month] !== null)
-                            .map(month => ({
-                              month: month.substring(0, 3),
-                              attendance: Number(customFields[month]) || 0
+                            .map(month => {
+                              // Check for both patterns: "January" or "january_attendance"
+                              const directValue = studentCustomFields[month];
+                              const snakeCaseKey = `${month.toLowerCase()}_attendance`;
+                              const snakeCaseValue = studentCustomFields[snakeCaseKey];
+                              const value = directValue ?? snakeCaseValue;
+                              return { month, value };
+                            })
+                            .filter(item => item.value !== undefined && item.value !== null)
+                            .map(item => ({
+                              month: item.month.substring(0, 3),
+                              attendance: Number(item.value) || 0
                             }));
                         })()}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
