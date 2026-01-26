@@ -125,7 +125,7 @@ function drawSectionTitle(doc: jsPDF, title: string, y: number, margin: number =
   return y + 14;
 }
 
-// Draw a bar chart
+// Draw a bar chart - styled to match Recharts preview
 function drawBarChart(
   doc: jsPDF,
   data: { name: string; value: number }[],
@@ -136,19 +136,27 @@ function drawBarChart(
   title: string,
   color: { r: number; g: number; b: number } = { r: 59, g: 130, b: 246 }
 ) {
-  const padding = 10;
-  const chartHeight = height - 40;
-  const chartWidth = width - padding * 2;
+  const leftPadding = 28; // Space for Y-axis labels
+  const rightPadding = 10;
+  const topPadding = title ? 25 : 15;
+  const bottomPadding = 22; // Space for X-axis labels
+  
+  const chartAreaX = x + leftPadding;
+  const chartAreaY = y + topPadding;
+  const chartAreaWidth = width - leftPadding - rightPadding;
+  const chartAreaHeight = height - topPadding - bottomPadding;
   
   // Background
   doc.setFillColor(248, 250, 252);
   roundedRect(doc, x, y, width, height, 4);
   
   // Title
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(51, 51, 51);
-  doc.text(title, x + width / 2, y + 15, { align: 'center' });
+  if (title) {
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(51, 51, 51);
+    doc.text(title, x + width / 2, y + 12, { align: 'center' });
+  }
   
   if (data.length === 0) {
     doc.setFontSize(9);
@@ -159,29 +167,74 @@ function drawBarChart(
   }
   
   const maxValue = Math.max(...data.map(d => d.value), 1);
-  const barWidth = (chartWidth - (data.length - 1) * 5) / data.length;
+  // Round up maxValue to nice number for grid
+  const niceMax = Math.ceil(maxValue / 10) * 10 || 100;
   
+  // Draw grid lines (horizontal) - like Recharts dashed grid
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  const gridLines = 5;
+  for (let i = 0; i <= gridLines; i++) {
+    const gridY = chartAreaY + (chartAreaHeight * i) / gridLines;
+    // Dashed line effect
+    const dashLength = 3;
+    const gapLength = 2;
+    let currentX = chartAreaX;
+    while (currentX < chartAreaX + chartAreaWidth) {
+      const endX = Math.min(currentX + dashLength, chartAreaX + chartAreaWidth);
+      doc.line(currentX, gridY, endX, gridY);
+      currentX += dashLength + gapLength;
+    }
+  }
+  
+  // Y-axis labels
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(120, 120, 120);
+  for (let i = 0; i <= gridLines; i++) {
+    const val = Math.round(niceMax - (niceMax * i) / gridLines);
+    const labelY = chartAreaY + (chartAreaHeight * i) / gridLines + 2;
+    doc.text(String(val), chartAreaX - 4, labelY, { align: 'right' });
+  }
+  
+  // Calculate bar dimensions
+  const totalBarsWidth = chartAreaWidth * 0.8; // 80% for bars, 20% for spacing
+  const barWidth = totalBarsWidth / data.length;
+  const barGap = (chartAreaWidth - totalBarsWidth) / (data.length + 1);
+  const barRadius = Math.min(barWidth / 4, 3); // Rounded top corners
+  
+  // Draw bars
   data.forEach((item, i) => {
-    const barHeight = (item.value / maxValue) * (chartHeight - 20);
-    const barX = x + padding + i * (barWidth + 5);
-    const barY = y + 25 + (chartHeight - 20 - barHeight);
+    const barHeight = (item.value / niceMax) * chartAreaHeight;
+    const barX = chartAreaX + barGap + i * (barWidth + barGap);
+    const barY = chartAreaY + chartAreaHeight - barHeight;
     
-    // Bar with color
+    // Draw bar with rounded top corners (like Recharts radius={[4, 4, 0, 0]})
     doc.setFillColor(color.r, color.g, color.b);
-    roundedRect(doc, barX, barY, barWidth, barHeight, 2);
     
-    // Value label
+    if (barHeight > barRadius * 2) {
+      // Rounded top rectangle
+      doc.roundedRect(barX, barY, barWidth, barHeight, barRadius, barRadius, 'F');
+      // Fill bottom part to make only top rounded
+      doc.rect(barX, barY + barHeight - barRadius, barWidth, barRadius, 'F');
+    } else if (barHeight > 0) {
+      // Too small for rounded corners
+      doc.rect(barX, barY, barWidth, barHeight, 'F');
+    }
+    
+    // Value label above bar
     doc.setFontSize(7);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(51, 51, 51);
-    doc.text(String(Math.round(item.value)), barX + barWidth / 2, barY - 3, { align: 'center' });
+    doc.text(String(Math.round(item.value)), barX + barWidth / 2, barY - 2, { align: 'center' });
     
     // X-axis label
-    doc.setFontSize(6);
+    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
-    const label = item.name.length > 8 ? item.name.substring(0, 8) + '...' : item.name;
-    doc.text(label, barX + barWidth / 2, y + height - 5, { align: 'center' });
+    const maxLabelLength = Math.floor(barWidth / 2.5);
+    const label = item.name.length > maxLabelLength ? item.name.substring(0, maxLabelLength) : item.name;
+    doc.text(label, barX + barWidth / 2, chartAreaY + chartAreaHeight + 10, { align: 'center' });
   });
 }
 
