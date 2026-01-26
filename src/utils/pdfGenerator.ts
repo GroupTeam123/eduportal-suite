@@ -689,7 +689,7 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
     currentY += lines.length * 5 + 10;
   }
   
-  // Performance Visualizations Section
+  // Performance Visualizations Section - Structured like the preview
   if (reportData.selectedCharts.length > 0) {
     // Check if we need a new page
     if (currentY > pageHeight - 100) {
@@ -699,93 +699,116 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
     
     currentY = drawSectionTitle(doc, 'Performance Visualizations', currentY, margin);
     
-    const chartWidth = (contentWidth - 8) / 2;
+    const halfWidth = (contentWidth - 8) / 2;
     const chartHeight = 70;
-    let chartX = margin;
-    let chartCount = 0;
     
-    // Attendance Pie Chart
+    // Attendance Section: Pie Chart (left) + Monthly Bar Chart (right) - Same as preview
     if (reportData.selectedCharts.includes('attendance_pie')) {
       const attendanceData = [
         { name: 'Present', value: reportData.student.attendance || 0, color: '#22c55e' },
         { name: 'Absent', value: 100 - (reportData.student.attendance || 0), color: '#ef4444' },
       ];
       
-      // If monthly attendance exists, draw both charts side by side
+      // Draw section background
+      doc.setFillColor(248, 250, 252);
+      roundedRect(doc, margin, currentY, contentWidth, chartHeight + 10, 4);
+      
+      // Section title
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 51, 51);
+      doc.text('Attendance', margin + 8, currentY + 10);
+      
+      // Pie chart on left - Overall Attendance
+      drawPieChart(doc, attendanceData, margin + 4, currentY + 8, halfWidth - 8, chartHeight - 4, 'Overall Attendance');
+      
+      // Monthly bar chart on right
       if (reportData.monthlyAttendance && reportData.monthlyAttendance.length > 0) {
-        const halfChartWidth = (chartWidth - 4) / 2;
-        
-        // Pie chart on left
-        drawPieChart(doc, attendanceData, chartX, currentY, halfChartWidth, chartHeight, 'Overall Attendance');
-        
-        // Monthly bar chart on right
         drawBarChart(
           doc,
           reportData.monthlyAttendance.map(m => ({ name: m.month, value: m.attendance })),
-          chartX + halfChartWidth + 4,
-          currentY,
-          chartWidth - halfChartWidth - 4,
-          chartHeight,
+          margin + halfWidth + 4,
+          currentY + 8,
+          halfWidth - 4,
+          chartHeight - 4,
           'Monthly Attendance',
           SUCCESS_COLOR
         );
       } else {
-        drawPieChart(doc, attendanceData, chartX, currentY, chartWidth, chartHeight, 'Attendance Overview');
+        // Show empty state for monthly if no data
+        doc.setFillColor(248, 250, 252);
+        roundedRect(doc, margin + halfWidth + 4, currentY + 8, halfWidth - 4, chartHeight - 4, 4);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(128, 128, 128);
+        doc.text('No monthly data', margin + halfWidth + (halfWidth / 2), currentY + chartHeight / 2 + 8, { align: 'center' });
       }
       
-      chartCount++;
-      chartX = margin + chartWidth + 8;
+      currentY += chartHeight + 18;
     }
     
-    // Subject Marks Bar Chart
+    // Subject Marks Section - Full width bar chart like preview
     if (reportData.selectedCharts.includes('marks_bar') && reportData.subjectMarks && reportData.subjectMarks.length > 0) {
-      drawBarChart(
-        doc,
-        reportData.subjectMarks.map(s => ({ name: s.subject, value: Math.round((s.marks / s.outOf) * 100) })),
-        chartX,
-        currentY,
-        chartWidth,
-        chartHeight,
-        'Subject-wise Marks (%)',
-        { r: 59, g: 130, b: 246 }
-      );
-      
-      chartCount++;
-      if (chartCount % 2 === 0) {
-        chartX = margin;
-        currentY += chartHeight + 8;
-      } else {
-        chartX = margin + chartWidth + 8;
-      }
-    }
-    
-    // Progress Line Chart
-    if (reportData.selectedCharts.includes('progress_line') && reportData.progressData && reportData.progressData.length > 0) {
-      if (chartCount % 2 !== 0) {
-        chartX = margin;
-        currentY += chartHeight + 8;
-      }
-      
       // Check page break
-      if (currentY > pageHeight - 80) {
+      if (currentY > pageHeight - 90) {
         doc.addPage();
         currentY = 20;
       }
       
+      // Draw section background
+      doc.setFillColor(248, 250, 252);
+      roundedRect(doc, margin, currentY, contentWidth, chartHeight + 10, 4);
+      
+      // Section title
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 51, 51);
+      doc.text('Subject Marks', margin + 8, currentY + 10);
+      
+      drawBarChart(
+        doc,
+        reportData.subjectMarks.map(s => ({ name: s.subject, value: s.marks })),
+        margin + 4,
+        currentY + 8,
+        contentWidth - 8,
+        chartHeight - 4,
+        '',
+        { r: 59, g: 130, b: 246 }
+      );
+      
+      currentY += chartHeight + 18;
+    }
+    
+    // Progress Trend Section - Full width line chart like preview
+    if (reportData.selectedCharts.includes('progress_line') && reportData.progressData && reportData.progressData.length > 0) {
+      // Check page break
+      if (currentY > pageHeight - 90) {
+        doc.addPage();
+        currentY = 20;
+      }
+      
+      // Draw section background
+      doc.setFillColor(248, 250, 252);
+      roundedRect(doc, margin, currentY, contentWidth, chartHeight + 10, 4);
+      
+      // Section title
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(51, 51, 51);
+      doc.text('Progress Trend', margin + 8, currentY + 10);
+      
       drawLineChart(
         doc,
         reportData.progressData.map(d => ({ label: d.month, value: d.score })),
-        chartX,
-        currentY,
-        contentWidth, // Full width for line chart
-        chartHeight,
-        'Progress Trend Over Time',
+        margin + 4,
+        currentY + 8,
+        contentWidth - 8,
+        chartHeight - 4,
+        '',
         { r: 139, g: 92, b: 246 }
       );
       
-      currentY += chartHeight + 8;
-    } else if (chartCount % 2 !== 0) {
-      currentY += chartHeight + 8;
+      currentY += chartHeight + 18;
     }
   }
   
