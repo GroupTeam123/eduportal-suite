@@ -33,6 +33,9 @@ interface CustomColumn {
   isSaved: boolean;
 }
 
+// Year-specific custom columns: { 1: [...], 2: [...], 3: [...], 4: [...] }
+type YearCustomColumns = Record<number, CustomColumn[]>;
+
 export default function TeacherStudents() {
   const { user, supabaseUser, departmentId } = useAuth();
   const { students, loading, addStudent, updateStudent, deleteStudent, importStudents } = useStudents(departmentId);
@@ -40,7 +43,7 @@ export default function TeacherStudents() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>('1');
-  const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
+  const [customColumnsByYear, setCustomColumnsByYear] = useState<YearCustomColumns>({ 1: [], 2: [], 3: [], 4: [] });
   const [newColumnName, setNewColumnName] = useState('');
   const [importState, setImportState] = useState<{
     status: 'idle' | 'parsing' | 'preview' | 'importing' | 'complete';
@@ -236,14 +239,36 @@ export default function TeacherStudents() {
     setImportState({ status: 'idle', result: null, progress: 0 });
   };
 
+  // Get custom columns for current year
+  const getCustomColumnsForYear = (year: number): CustomColumn[] => {
+    return customColumnsByYear[year] || [];
+  };
+
   const handleAddColumn = () => {
     if (!newColumnName.trim()) return;
+    const currentYear = parseInt(selectedTab);
+    const currentCols = getCustomColumnsForYear(currentYear);
+    
+    // Check if column already exists (prevent duplicates)
+    const columnExists = currentCols.some(c => c.name.toLowerCase() === newColumnName.trim().toLowerCase());
+    if (columnExists) {
+      toast({
+        title: 'Column Already Exists',
+        description: `A column with name "${newColumnName.trim()}" already exists in this table.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     const newCol: CustomColumn = {
       id: Date.now().toString(),
       name: newColumnName.trim(),
       isSaved: false,
     };
-    setCustomColumns(prev => [...prev, newCol]);
+    setCustomColumnsByYear(prev => ({
+      ...prev,
+      [currentYear]: [...(prev[currentYear] || []), newCol],
+    }));
     setNewColumnName('');
     toast({
       title: 'Column Added',
@@ -251,14 +276,20 @@ export default function TeacherStudents() {
     });
   };
 
-  const handleRemoveColumn = (colId: string) => {
-    setCustomColumns(prev => prev.filter(c => c.id !== colId));
+  const handleRemoveColumn = (colId: string, year: number) => {
+    setCustomColumnsByYear(prev => ({
+      ...prev,
+      [year]: (prev[year] || []).filter(c => c.id !== colId),
+    }));
   };
 
-  const handleSaveColumn = (colId: string) => {
-    setCustomColumns(prev => prev.map(c => 
-      c.id === colId ? { ...c, isSaved: true } : c
-    ));
+  const handleSaveColumn = (colId: string, year: number) => {
+    setCustomColumnsByYear(prev => ({
+      ...prev,
+      [year]: (prev[year] || []).map(c => 
+        c.id === colId ? { ...c, isSaved: true } : c
+      ),
+    }));
     toast({
       title: 'Column Saved',
       description: 'Column has been saved permanently.',
@@ -370,14 +401,19 @@ export default function TeacherStudents() {
                       {month} Att.
                     </TableHead>
                   ))}
-                  {/* Saved columns from database */}
-                  {getSavedColumnsFromData(yearStudents).map(colName => (
-                    <TableHead key={colName} className="font-semibold">
-                      {colName}
-                    </TableHead>
-                  ))}
-                  {/* Temporary custom columns */}
-                  {customColumns.filter(col => !col.isSaved).map(col => (
+                  {/* Saved columns from database - exclude any that exist in current session columns to prevent duplicates */}
+                  {(() => {
+                    const sessionColNames = getCustomColumnsForYear(year).map(c => c.name.toLowerCase());
+                    return getSavedColumnsFromData(yearStudents)
+                      .filter(colName => !sessionColNames.includes(colName.toLowerCase()))
+                      .map(colName => (
+                        <TableHead key={colName} className="font-semibold">
+                          {colName}
+                        </TableHead>
+                      ));
+                  })()}
+                  {/* Temporary custom columns for this year */}
+                  {getCustomColumnsForYear(year).filter(col => !col.isSaved).map(col => (
                     <TableHead key={col.id} className="font-semibold">
                       <div className="flex items-center gap-2">
                         {col.name}
@@ -385,7 +421,7 @@ export default function TeacherStudents() {
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 text-success hover:text-success hover:bg-success/10"
-                          onClick={() => handleSaveColumn(col.id)}
+                          onClick={() => handleSaveColumn(col.id, year)}
                           title="Save column permanently"
                         >
                           <Check className="w-3 h-3" />
@@ -394,7 +430,7 @@ export default function TeacherStudents() {
                           variant="ghost"
                           size="icon"
                           className="h-5 w-5 text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveColumn(col.id)}
+                          onClick={() => handleRemoveColumn(col.id, year)}
                           title="Remove column"
                         >
                           <X className="w-3 h-3" />
@@ -402,8 +438,8 @@ export default function TeacherStudents() {
                       </div>
                     </TableHead>
                   ))}
-                  {/* Saved custom columns (from this session) */}
-                  {customColumns.filter(col => col.isSaved).map(col => (
+                  {/* Saved custom columns from this session for this year */}
+                  {getCustomColumnsForYear(year).filter(col => col.isSaved).map(col => (
                     <TableHead key={col.id} className="font-semibold">
                       {col.name}
                     </TableHead>
@@ -458,18 +494,23 @@ export default function TeacherStudents() {
                           </TableCell>
                         );
                       })}
-                      {/* Saved columns from database */}
-                      {getSavedColumnsFromData(yearStudents).map(colName => (
-                        <TableCell key={colName}>
-                          <Input
-                            className="h-8 w-24"
-                            defaultValue={(customFields as Record<string, string> | null)?.[colName] || ''}
-                            onBlur={(e) => handleUpdateCustomField(student.id, colName, e.target.value)}
-                          />
-                        </TableCell>
-                      ))}
-                      {/* All custom columns (both temporary and saved from this session) */}
-                      {customColumns.map(col => (
+                      {/* Saved columns from database - exclude session columns to prevent duplicates */}
+                      {(() => {
+                        const sessionColNames = getCustomColumnsForYear(year).map(c => c.name.toLowerCase());
+                        return getSavedColumnsFromData(yearStudents)
+                          .filter(colName => !sessionColNames.includes(colName.toLowerCase()))
+                          .map(colName => (
+                            <TableCell key={colName}>
+                              <Input
+                                className="h-8 w-24"
+                                defaultValue={(customFields as Record<string, string> | null)?.[colName] || ''}
+                                onBlur={(e) => handleUpdateCustomField(student.id, colName, e.target.value)}
+                              />
+                            </TableCell>
+                          ));
+                      })()}
+                      {/* All custom columns for this year (both temporary and saved from this session) */}
+                      {getCustomColumnsForYear(year).map(col => (
                         <TableCell key={col.id}>
                           <Input
                             className="h-8 w-24"
@@ -640,8 +681,8 @@ export default function TeacherStudents() {
             {(() => {
               const allStudents = getStudentsByYear(formData.year || 1);
               const savedCols = getSavedColumnsFromData(allStudents);
-              // Add columns from current session (both saved and unsaved)
-              const sessionCols = customColumns.map(c => c.name);
+              // Add columns from current session for this year (both saved and unsaved)
+              const sessionCols = getCustomColumnsForYear(formData.year || 1).map(c => c.name);
               // Also include any custom fields that exist on the current student being edited
               const studentCustomFields = editingStudent?.custom_fields as Record<string, unknown> | null;
               const studentCols = studentCustomFields ? Object.keys(studentCustomFields).filter(key => {
