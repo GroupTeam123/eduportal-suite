@@ -187,6 +187,32 @@ export function useReports(userId: string | null, role: UserRole | null, departm
     }
   };
 
+  const deleteReport = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('reports')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setReports(prev => prev.filter(r => r.id !== id));
+      toast({
+        title: 'Report Deleted',
+        description: 'Report has been deleted successfully.',
+      });
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete report';
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
   return {
     reports,
     loading,
@@ -194,6 +220,7 @@ export function useReports(userId: string | null, role: UserRole | null, departm
     updateReport,
     submitReport,
     approveReport,
+    deleteReport,
     refetch: fetchReports,
   };
 }

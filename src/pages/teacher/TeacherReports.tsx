@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useReports, ReportRecord } from '@/hooks/useReports';
 import { useStudents } from '@/hooks/useStudents';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Loader2, Send, User, Plus, X } from 'lucide-react';
+import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Loader2, Send, User, Plus, X, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, LineChart as RechartsLine, Line } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
@@ -59,7 +59,7 @@ const MONTH_KEYS = [
 
 export default function TeacherReports() {
   const { supabaseUser, user, departmentId } = useAuth();
-  const { reports, loading, createReport, submitReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
+  const { reports, loading, createReport, submitReport, deleteReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
   const { students } = useStudents(departmentId);
   
   const [reportTab, setReportTab] = useState<string>('class');
@@ -211,6 +211,10 @@ export default function TeacherReports() {
     await submitReport(reportId, 'hod');
   };
 
+  const handleDeleteReport = async (reportId: string) => {
+    await deleteReport(reportId);
+  };
+
   const handleDownloadPDF = (report?: ReportRecord) => {
     // Calculate summary from filtered students
     const totalStudents = filteredStudents.length;
@@ -243,12 +247,32 @@ export default function TeacherReports() {
         performance: selectedChartsToUse.includes('performance') ? performanceData : undefined,
         comparison: selectedChartsToUse.includes('comparison') ? subjectComparisonData : undefined,
       },
-      students: filteredStudents.slice(0, 30).map(s => ({
-        name: s.name,
-        email: s.email || undefined,
-        attendance: s.attendance || undefined,
-        guardian_name: s.guardian_name || undefined,
-      })),
+      students: filteredStudents.slice(0, 30).map(s => {
+        // Calculate average attendance from custom_fields monthly data
+        const customFields = s.custom_fields as Record<string, unknown> | null;
+        let avgAttendance = s.attendance || 0;
+        
+        if (customFields) {
+          const monthlyValues: number[] = [];
+          MONTH_KEYS.forEach(({ key }) => {
+            if (customFields[key] !== undefined && customFields[key] !== null) {
+              const val = Number(customFields[key]);
+              if (!isNaN(val)) monthlyValues.push(val);
+            }
+          });
+          if (monthlyValues.length > 0) {
+            avgAttendance = monthlyValues.reduce((sum, v) => sum + v, 0) / monthlyValues.length;
+          }
+        }
+
+        return {
+          student_id: s.student_id || undefined,
+          name: s.name,
+          email: s.email || undefined,
+          contact: s.contact || undefined,
+          attendance: avgAttendance,
+        };
+      }),
       summary: {
         totalStudents,
         avgAttendance,
@@ -480,9 +504,14 @@ export default function TeacherReports() {
                           </div>
                           <div className="flex items-center gap-1">
                             {report.status === 'draft' && (
-                              <Button variant="ghost" size="icon" onClick={() => handleSubmitToHOD(report.id)} title="Submit to HOD">
-                                <Send className="w-4 h-4" />
-                              </Button>
+                              <>
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(report.id)} title="Delete Report" className="text-destructive hover:text-destructive">
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleSubmitToHOD(report.id)} title="Submit to HOD">
+                                  <Send className="w-4 h-4" />
+                                </Button>
+                              </>
                             )}
                             <Button variant="ghost" size="icon" onClick={() => handleDownloadPDF(report)}>
                               <Download className="w-4 h-4" />
