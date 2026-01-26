@@ -11,7 +11,7 @@ import { StudentRecord } from '@/hooks/useStudents';
 import { ReportRecord } from '@/hooks/useReports';
 import { Download, Send, BarChart3, PieChart, LineChart, User, Plus, X, Loader2, ChevronsUpDown, Check } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, LineChart as RechartsLine, Line, Legend } from 'recharts';
-import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
+import { generateSingleStudentReportPDF, SingleStudentReportData } from '@/utils/pdfGenerator';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -154,36 +154,29 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
   const handleDownloadPDF = () => {
     if (!selectedStudent) return;
 
-    const reportData: ReportData = {
-      title: reportTitle || `Report for ${selectedStudent.name}`,
-      content: reportDescription || undefined,
+    const reportData: SingleStudentReportData = {
+      title: reportTitle || `Student Report - ${selectedStudent.name}`,
       generatedBy: userName,
       date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
-      charts: {
-        attendance: selectedCharts.includes('attendance_pie') ? attendancePieData.map(d => ({ name: d.name, attendance: d.value })) : undefined,
-        grades: selectedCharts.includes('marks_bar') ? subjectMarks.map((s, i) => ({
-          name: s.subject,
-          value: s.marks,
-          color: SUBJECT_COLORS[i % SUBJECT_COLORS.length],
-        })) : undefined,
-        performance: selectedCharts.includes('progress_line') ? progressData : undefined,
-      },
-      students: [{
+      description: reportDescription || undefined,
+      student: {
         name: selectedStudent.name,
+        studentId: selectedStudent.student_id || undefined,
+        year: selectedStudent.year || undefined,
         email: selectedStudent.email || undefined,
-        attendance: selectedStudent.attendance || undefined,
-        guardian_name: selectedStudent.guardian_name || undefined,
-      }],
-      summary: {
-        totalStudents: 1,
-        avgAttendance: selectedStudent.attendance || 0,
-        highPerformers: (selectedStudent.attendance || 0) >= 90 ? 1 : 0,
-        lowAttendance: (selectedStudent.attendance || 0) < 75 ? 1 : 0,
+        attendance: selectedStudent.attendance || 0,
+        contact: selectedStudent.contact || undefined,
+        guardianName: selectedStudent.guardian_name || undefined,
+        guardianPhone: selectedStudent.guardian_phone || undefined,
       },
+      customFields: customFields.filter(f => f.label && f.value).map(f => ({ label: f.label, value: f.value })),
+      subjectMarks: subjectMarks.filter(s => s.subject),
+      progressData: progressData,
+      selectedCharts: selectedCharts,
     };
 
-    generateAnnualReportPDF(reportData);
-    toast({ title: 'PDF Downloaded', description: 'Report has been saved.' });
+    generateSingleStudentReportPDF(reportData);
+    toast({ title: 'PDF Downloaded', description: 'Student report has been saved.' });
   };
 
   const handleSubmit = async () => {
