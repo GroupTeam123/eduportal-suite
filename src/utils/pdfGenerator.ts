@@ -46,7 +46,8 @@ export interface SingleStudentReportData {
     guardianPhone?: string;
   };
   customFields?: { label: string; value: string }[];
-  subjectMarks?: { subject: string; marks: number }[];
+  subjectMarks?: { subject: string; marks: number; outOf: number }[];
+  monthlyAttendance?: { month: string; attendance: number }[];
   progressData?: { month: string; score: number }[];
   selectedCharts: string[];
 }
@@ -710,7 +711,27 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
         { name: 'Absent', value: 100 - (reportData.student.attendance || 0), color: '#ef4444' },
       ];
       
-      drawPieChart(doc, attendanceData, chartX, currentY, chartWidth, chartHeight, 'Attendance Overview');
+      // If monthly attendance exists, draw both charts side by side
+      if (reportData.monthlyAttendance && reportData.monthlyAttendance.length > 0) {
+        const halfChartWidth = (chartWidth - 4) / 2;
+        
+        // Pie chart on left
+        drawPieChart(doc, attendanceData, chartX, currentY, halfChartWidth, chartHeight, 'Overall Attendance');
+        
+        // Monthly bar chart on right
+        drawBarChart(
+          doc,
+          reportData.monthlyAttendance.map(m => ({ name: m.month, value: m.attendance })),
+          chartX + halfChartWidth + 4,
+          currentY,
+          chartWidth - halfChartWidth - 4,
+          chartHeight,
+          'Monthly Attendance',
+          SUCCESS_COLOR
+        );
+      } else {
+        drawPieChart(doc, attendanceData, chartX, currentY, chartWidth, chartHeight, 'Attendance Overview');
+      }
       
       chartCount++;
       chartX = margin + chartWidth + 8;
@@ -720,12 +741,12 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
     if (reportData.selectedCharts.includes('marks_bar') && reportData.subjectMarks && reportData.subjectMarks.length > 0) {
       drawBarChart(
         doc,
-        reportData.subjectMarks.map(s => ({ name: s.subject, value: s.marks })),
+        reportData.subjectMarks.map(s => ({ name: s.subject, value: Math.round((s.marks / s.outOf) * 100) })),
         chartX,
         currentY,
         chartWidth,
         chartHeight,
-        'Subject-wise Marks',
+        'Subject-wise Marks (%)',
         { r: 59, g: 130, b: 246 }
       );
       
@@ -778,33 +799,30 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
     
     currentY = drawSectionTitle(doc, 'Subject-wise Performance', currentY, margin);
     
-    // Calculate statistics
-    const totalMarks = reportData.subjectMarks.reduce((sum, s) => sum + s.marks, 0);
-    const avgMarks = totalMarks / reportData.subjectMarks.length;
-    const highestMarks = Math.max(...reportData.subjectMarks.map(s => s.marks));
-    const lowestMarks = Math.min(...reportData.subjectMarks.map(s => s.marks));
-    
     autoTable(doc, {
       startY: currentY,
-      head: [['Subject', 'Marks', 'Grade', 'Remarks']],
+      head: [['Subject', 'Marks Obtained', 'Out Of', 'Percentage', 'Grade', 'Remarks']],
       body: reportData.subjectMarks.map(s => {
+        const percentage = Math.round((s.marks / s.outOf) * 100);
         let grade = 'F';
         let remarks = 'Needs Improvement';
-        if (s.marks >= 90) { grade = 'A+'; remarks = 'Excellent'; }
-        else if (s.marks >= 80) { grade = 'A'; remarks = 'Very Good'; }
-        else if (s.marks >= 70) { grade = 'B+'; remarks = 'Good'; }
-        else if (s.marks >= 60) { grade = 'B'; remarks = 'Satisfactory'; }
-        else if (s.marks >= 50) { grade = 'C'; remarks = 'Average'; }
-        else if (s.marks >= 40) { grade = 'D'; remarks = 'Below Average'; }
+        if (percentage >= 90) { grade = 'A+'; remarks = 'Excellent'; }
+        else if (percentage >= 80) { grade = 'A'; remarks = 'Very Good'; }
+        else if (percentage >= 70) { grade = 'B+'; remarks = 'Good'; }
+        else if (percentage >= 60) { grade = 'B'; remarks = 'Satisfactory'; }
+        else if (percentage >= 50) { grade = 'C'; remarks = 'Average'; }
+        else if (percentage >= 40) { grade = 'D'; remarks = 'Below Average'; }
         
-        return [s.subject, `${s.marks}/100`, grade, remarks];
+        return [s.subject, String(s.marks), String(s.outOf), `${percentage}%`, grade, remarks];
       }),
-      foot: [[
-        'Summary',
-        `Avg: ${avgMarks.toFixed(1)}`,
-        `High: ${highestMarks}`,
-        `Low: ${lowestMarks}`,
-      ]],
+      foot: [(() => {
+        const totalMarks = reportData.subjectMarks!.reduce((sum, s) => sum + s.marks, 0);
+        const totalOutOf = reportData.subjectMarks!.reduce((sum, s) => sum + s.outOf, 0);
+        const avgPercentage = Math.round((totalMarks / totalOutOf) * 100);
+        const highestPercentage = Math.max(...reportData.subjectMarks!.map(s => Math.round((s.marks / s.outOf) * 100)));
+        const lowestPercentage = Math.min(...reportData.subjectMarks!.map(s => Math.round((s.marks / s.outOf) * 100)));
+        return ['Total', String(totalMarks), String(totalOutOf), `${avgPercentage}%`, `High: ${highestPercentage}%`, `Low: ${lowestPercentage}%`];
+      })()],
       margin: { left: margin, right: margin },
       styles: {
         fontSize: 9,

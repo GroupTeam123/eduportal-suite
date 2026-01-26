@@ -44,10 +44,10 @@ export function SingleStudentReport({ students, onCreateReport, onSubmitToHOD, u
   const [reportDescription, setReportDescription] = useState('');
   const [selectedCharts, setSelectedCharts] = useState<string[]>(['attendance_pie', 'marks_bar']);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
-  const [subjectMarks, setSubjectMarks] = useState<{ subject: string; marks: number }[]>([
-    { subject: 'Mathematics', marks: 85 },
-    { subject: 'Science', marks: 78 },
-    { subject: 'English', marks: 82 },
+  const [subjectMarks, setSubjectMarks] = useState<{ subject: string; marks: number; outOf: number }[]>([
+    { subject: 'Mathematics', marks: 85, outOf: 100 },
+    { subject: 'Science', marks: 78, outOf: 100 },
+    { subject: 'English', marks: 82, outOf: 100 },
   ]);
   const [progressData, setProgressData] = useState<{ month: string; score: number }[]>([
     { month: 'Aug', score: 70 },
@@ -84,14 +84,14 @@ export function SingleStudentReport({ students, onCreateReport, onSubmitToHOD, u
   };
 
   const addSubject = () => {
-    setSubjectMarks(prev => [...prev, { subject: '', marks: 0 }]);
+    setSubjectMarks(prev => [...prev, { subject: '', marks: 0, outOf: 100 }]);
   };
 
   const removeSubject = (index: number) => {
     setSubjectMarks(prev => prev.filter((_, i) => i !== index));
   };
 
-  const updateSubjectMarks = (index: number, field: 'subject' | 'marks', value: string | number) => {
+  const updateSubjectMarks = (index: number, field: 'subject' | 'marks' | 'outOf', value: string | number) => {
     setSubjectMarks(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
   };
 
@@ -170,7 +170,14 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
         guardianPhone: selectedStudent.guardian_phone || undefined,
       },
       customFields: customFields.filter(f => f.label && f.value).map(f => ({ label: f.label, value: f.value })),
-      subjectMarks: subjectMarks.filter(s => s.subject),
+      subjectMarks: subjectMarks.filter(s => s.subject).map(s => ({ subject: s.subject, marks: s.marks, outOf: s.outOf })),
+      monthlyAttendance: (() => {
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const customFields = selectedStudent.custom_fields as Record<string, unknown> || {};
+        return months
+          .filter(month => customFields[month] !== undefined && customFields[month] !== null)
+          .map(month => ({ month: month.substring(0, 3), attendance: Number(customFields[month]) || 0 }));
+      })(),
       progressData: progressData,
       selectedCharts: selectedCharts,
     };
@@ -345,9 +352,17 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
                         placeholder="Marks"
                         value={item.marks}
                         onChange={(e) => updateSubjectMarks(index, 'marks', parseInt(e.target.value) || 0)}
-                        className="w-24"
+                        className="w-20"
                         min={0}
-                        max={100}
+                      />
+                      <span className="text-muted-foreground">/</span>
+                      <Input
+                        type="number"
+                        placeholder="Out of"
+                        value={item.outOf}
+                        onChange={(e) => updateSubjectMarks(index, 'outOf', parseInt(e.target.value) || 100)}
+                        className="w-20"
+                        min={1}
                       />
                       <Button variant="ghost" size="icon" onClick={() => removeSubject(index)}>
                         <X className="w-4 h-4" />
@@ -393,28 +408,56 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
                 </div>
               </div>
 
-              {selectedCharts.includes('attendance_pie') && (
+              {selectedCharts.includes('attendance_pie') && selectedStudent && (
                 <div className="bg-muted/30 rounded-lg p-4">
                   <h5 className="text-sm font-medium mb-3">Attendance</h5>
-                  <ResponsiveContainer width="100%" height={180}>
-                    <RechartsPie>
-                      <Pie
-                        data={attendancePieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={40}
-                        outerRadius={60}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {attendancePieData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={ATTENDANCE_COLORS[index]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </RechartsPie>
-                  </ResponsiveContainer>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Pie Chart */}
+                    <div>
+                      <p className="text-xs text-muted-foreground text-center mb-2">Overall Attendance</p>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <RechartsPie>
+                          <Pie
+                            data={attendancePieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={35}
+                            outerRadius={55}
+                            paddingAngle={2}
+                            dataKey="value"
+                          >
+                            {attendancePieData.map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={ATTENDANCE_COLORS[index]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                          <Legend />
+                        </RechartsPie>
+                      </ResponsiveContainer>
+                    </div>
+                    {/* Monthly Bar Chart */}
+                    <div>
+                      <p className="text-xs text-muted-foreground text-center mb-2">Monthly Attendance</p>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <BarChart data={(() => {
+                          const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                          const customFields = selectedStudent.custom_fields as Record<string, unknown> || {};
+                          return months
+                            .filter(month => customFields[month] !== undefined && customFields[month] !== null)
+                            .map(month => ({
+                              month: month.substring(0, 3),
+                              attendance: Number(customFields[month]) || 0
+                            }));
+                        })()}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={9} />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={9} domain={[0, 100]} />
+                          <Tooltip />
+                          <Bar dataKey="attendance" fill="hsl(142, 76%, 36%)" radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 </div>
               )}
 
