@@ -762,42 +762,32 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
         { name: 'Absent', value: 100 - (reportData.student.attendance || 0), color: '#ef4444' },
       ];
       
-      // Draw section background
-      doc.setFillColor(248, 250, 252);
-      roundedRect(doc, margin, currentY, contentWidth, chartHeight + 10, 4);
-      
-      // Section title
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(51, 51, 51);
-      doc.text('Attendance', margin + 8, currentY + 10);
-      
       // Pie chart on left - Overall Attendance
-      drawPieChart(doc, attendanceData, margin + 4, currentY + 8, halfWidth - 8, chartHeight - 4, 'Overall Attendance');
+      drawPieChart(doc, attendanceData, margin, currentY, halfWidth, chartHeight, 'Overall Attendance');
       
       // Monthly bar chart on right
       if (reportData.monthlyAttendance && reportData.monthlyAttendance.length > 0) {
         drawBarChart(
           doc,
           reportData.monthlyAttendance.map(m => ({ name: m.month, value: m.attendance })),
-          margin + halfWidth + 4,
-          currentY + 8,
-          halfWidth - 4,
-          chartHeight - 4,
+          margin + halfWidth + 8,
+          currentY,
+          halfWidth,
+          chartHeight,
           'Monthly Attendance',
           SUCCESS_COLOR
         );
       } else {
         // Show empty state for monthly if no data
         doc.setFillColor(248, 250, 252);
-        roundedRect(doc, margin + halfWidth + 4, currentY + 8, halfWidth - 4, chartHeight - 4, 4);
+        roundedRect(doc, margin + halfWidth + 8, currentY, halfWidth, chartHeight, 4);
         doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(128, 128, 128);
-        doc.text('No monthly data', margin + halfWidth + (halfWidth / 2), currentY + chartHeight / 2 + 8, { align: 'center' });
+        doc.text('No monthly data', margin + halfWidth + 8 + (halfWidth / 2), currentY + chartHeight / 2, { align: 'center' });
       }
       
-      currentY += chartHeight + 18;
+      currentY += chartHeight + 10;
     }
     
     // Subject Marks Section - Full width bar chart like preview
@@ -808,28 +798,18 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
         currentY = 20;
       }
       
-      // Draw section background
-      doc.setFillColor(248, 250, 252);
-      roundedRect(doc, margin, currentY, contentWidth, chartHeight + 10, 4);
-      
-      // Section title
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(51, 51, 51);
-      doc.text('Subject Marks', margin + 8, currentY + 10);
-      
       drawBarChart(
         doc,
         reportData.subjectMarks.map(s => ({ name: s.subject, value: s.marks })),
-        margin + 4,
-        currentY + 8,
-        contentWidth - 8,
-        chartHeight - 4,
-        '',
+        margin,
+        currentY,
+        contentWidth,
+        chartHeight,
+        'Subject Marks',
         { r: 59, g: 130, b: 246 }
       );
       
-      currentY += chartHeight + 18;
+      currentY += chartHeight + 10;
     }
     
     // Progress Trend Section - Full width line chart like preview
@@ -840,28 +820,18 @@ export function generateSingleStudentReportPDF(reportData: SingleStudentReportDa
         currentY = 20;
       }
       
-      // Draw section background
-      doc.setFillColor(248, 250, 252);
-      roundedRect(doc, margin, currentY, contentWidth, chartHeight + 10, 4);
-      
-      // Section title
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(51, 51, 51);
-      doc.text('Progress Trend', margin + 8, currentY + 10);
-      
       drawLineChart(
         doc,
         reportData.progressData.map(d => ({ label: d.month, value: d.score })),
-        margin + 4,
-        currentY + 8,
-        contentWidth - 8,
-        chartHeight - 4,
-        '',
+        margin,
+        currentY,
+        contentWidth,
+        chartHeight,
+        'Progress Trend',
         { r: 139, g: 92, b: 246 }
       );
       
-      currentY += chartHeight + 18;
+      currentY += chartHeight + 10;
     }
   }
   
