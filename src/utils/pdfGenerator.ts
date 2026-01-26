@@ -16,10 +16,11 @@ export interface ReportData {
     comparison?: { subject: string; avg: number }[];
   };
   students?: {
+    student_id?: string;
     name: string;
     email?: string;
+    contact?: number;
     attendance?: number;
-    guardian_name?: string;
   }[];
   summary?: {
     totalStudents: number;
@@ -607,12 +608,13 @@ export function generateAnnualReportPDF(reportData: ReportData): void {
     
     autoTable(doc, {
       startY: currentY,
-      head: [['Name', 'Email', 'Attendance %', 'Guardian']],
-      body: reportData.students.slice(0, 25).map(s => [
+      head: [['Student ID', 'Name', 'Email', 'Contact', 'Attendance']],
+      body: reportData.students.slice(0, 30).map(s => [
+        s.student_id || '-',
         s.name,
         s.email || '-',
-        s.attendance !== undefined ? `${s.attendance}%` : '-',
-        s.guardian_name || '-',
+        s.contact ? String(s.contact) : '-',
+        s.attendance !== undefined ? `${s.attendance.toFixed(1)}%` : '-',
       ]),
       margin: { left: margin, right: margin },
       styles: {

@@ -3,14 +3,14 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useReports, ReportRecord } from '@/hooks/useReports';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Download, Eye, CheckCircle, Clock, AlertCircle, Send, Loader2 } from 'lucide-react';
+import { FileText, Download, Eye, CheckCircle, Clock, AlertCircle, Send, Loader2, Trash2 } from 'lucide-react';
 import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
 import { useStudents } from '@/hooks/useStudents';
 import { useToast } from '@/hooks/use-toast';
 
 export default function HODReports() {
   const { supabaseUser, user, departmentId } = useAuth();
-  const { reports, loading, submitReport, approveReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
+  const { reports, loading, submitReport, approveReport, deleteReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
   const { students } = useStudents(departmentId);
   const { toast } = useToast();
 
@@ -72,6 +72,10 @@ export default function HODReports() {
     await submitReport(reportId, 'principal');
   };
 
+  const handleDeleteReport = async (reportId: string) => {
+    await deleteReport(reportId);
+  };
+
   if (loading) {
     return (
       <DashboardLayout title="Teacher Reports" subtitle="Loading...">
@@ -112,10 +116,15 @@ export default function HODReports() {
 
               <div className="flex gap-2">
                 {report.status === 'submitted_to_hod' && (
-                  <Button size="sm" className="flex-1" onClick={() => handleSubmitToPrincipal(report.id)}>
-                    <Send className="w-4 h-4 mr-2" />
-                    Forward
-                  </Button>
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => handleDeleteReport(report.id)} className="text-destructive hover:text-destructive">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" className="flex-1" onClick={() => handleSubmitToPrincipal(report.id)}>
+                      <Send className="w-4 h-4 mr-2" />
+                      Forward
+                    </Button>
+                  </>
                 )}
                 <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownloadPDF(report)}>
                   <Download className="w-4 h-4 mr-2" />
