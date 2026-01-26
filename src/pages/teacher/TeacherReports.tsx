@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useReports, ReportRecord } from '@/hooks/useReports';
 import { useStudents } from '@/hooks/useStudents';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Loader2, Send, User } from 'lucide-react';
+import { FileText, Download, BarChart3, PieChart, LineChart, TrendingUp, Loader2, Send, User, Plus, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Pie, Cell, LineChart as RechartsLine, Line } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
@@ -41,6 +41,22 @@ const performanceData = [
   { month: 'Jan', score: 88 },
 ];
 
+// Month keys for attendance extraction from custom_fields
+const MONTH_KEYS = [
+  { key: 'january_attendance', label: 'Jan' },
+  { key: 'february_attendance', label: 'Feb' },
+  { key: 'march_attendance', label: 'Mar' },
+  { key: 'april_attendance', label: 'Apr' },
+  { key: 'may_attendance', label: 'May' },
+  { key: 'june_attendance', label: 'Jun' },
+  { key: 'july_attendance', label: 'Jul' },
+  { key: 'august_attendance', label: 'Aug' },
+  { key: 'september_attendance', label: 'Sep' },
+  { key: 'october_attendance', label: 'Oct' },
+  { key: 'november_attendance', label: 'Nov' },
+  { key: 'december_attendance', label: 'Dec' },
+];
+
 export default function TeacherReports() {
   const { supabaseUser, user, departmentId } = useAuth();
   const { reports, loading, createReport, submitReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
@@ -52,6 +68,7 @@ export default function TeacherReports() {
   const [reportContent, setReportContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedYear, setSelectedYear] = useState<string>('all');
+  const [subjectInputs, setSubjectInputs] = useState<string[]>(['']);
   const { toast } = useToast();
 
   // Filter students by selected year
@@ -59,11 +76,83 @@ export default function TeacherReports() {
     ? students 
     : students.filter(s => s.year === parseInt(selectedYear));
 
-  // Generate attendance data from filtered students
-  const attendanceData = filteredStudents.slice(0, 8).map(s => ({ 
-    name: s.name.split(' ')[0].substring(0, 6), 
-    attendance: s.attendance || 0 
-  }));
+  // Calculate average monthly attendance across all filtered students
+  const monthlyAttendanceData = useMemo(() => {
+    if (filteredStudents.length === 0) return [];
+
+    const monthlyAverages: { name: string; attendance: number }[] = [];
+
+    MONTH_KEYS.forEach(({ key, label }) => {
+      let totalAttendance = 0;
+      let count = 0;
+
+      filteredStudents.forEach(student => {
+        const customFields = student.custom_fields as Record<string, unknown> | null;
+        if (customFields && customFields[key] !== undefined && customFields[key] !== null) {
+          const value = Number(customFields[key]);
+          if (!isNaN(value)) {
+            totalAttendance += value;
+            count++;
+          }
+        }
+      });
+
+      if (count > 0) {
+        monthlyAverages.push({
+          name: label,
+          attendance: Math.round(totalAttendance / count),
+        });
+      }
+    });
+
+    return monthlyAverages;
+  }, [filteredStudents]);
+
+  // Calculate subject comparison data based on user-entered subjects
+  const subjectComparisonData = useMemo(() => {
+    const validSubjects = subjectInputs.filter(s => s.trim() !== '');
+    if (validSubjects.length === 0 || filteredStudents.length === 0) return [];
+
+    return validSubjects.map(subject => {
+      const subjectKey = subject.toLowerCase().trim();
+      let totalMarks = 0;
+      let count = 0;
+
+      filteredStudents.forEach(student => {
+        const customFields = student.custom_fields as Record<string, unknown> | null;
+        if (customFields) {
+          // Search for matching key (case-insensitive)
+          Object.keys(customFields).forEach(key => {
+            if (key.toLowerCase().includes(subjectKey)) {
+              const value = Number(customFields[key]);
+              if (!isNaN(value)) {
+                totalMarks += value;
+                count++;
+              }
+            }
+          });
+        }
+      });
+
+      return {
+        subject: subject.trim(),
+        avg: count > 0 ? Math.round(totalMarks / count) : 0,
+      };
+    });
+  }, [subjectInputs, filteredStudents]);
+
+  // Subject input handlers
+  const handleAddSubject = () => {
+    setSubjectInputs(prev => [...prev, '']);
+  };
+
+  const handleRemoveSubject = (index: number) => {
+    setSubjectInputs(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubjectChange = (index: number, value: string) => {
+    setSubjectInputs(prev => prev.map((s, i) => i === index ? value : s));
+  };
 
   const toggleChart = (chartId: string) => {
     setSelectedCharts(prev => 
@@ -97,7 +186,8 @@ export default function TeacherReports() {
       type: 'class_report',
       selectedYear,
       selectedCharts,
-      attendanceData,
+      attendanceData: monthlyAttendanceData,
+      subjectComparisonData,
       gradeData,
       performanceData,
       generatedAt: new Date().toISOString(),
@@ -145,18 +235,13 @@ export default function TeacherReports() {
         day: 'numeric' 
       }),
       charts: {
-        attendance: selectedChartsToUse.includes('attendance') ? attendanceData : undefined,
+        attendance: selectedChartsToUse.includes('attendance') ? monthlyAttendanceData : undefined,
         grades: selectedChartsToUse.includes('grades') ? gradeData.map(g => ({
           ...g,
           color: g.color.startsWith('hsl') ? hslToHex(g.color) : g.color,
         })) : undefined,
         performance: selectedChartsToUse.includes('performance') ? performanceData : undefined,
-        comparison: selectedChartsToUse.includes('comparison') ? [
-          { subject: 'DSA', avg: 82 },
-          { subject: 'OS', avg: 78 },
-          { subject: 'DBMS', avg: 85 },
-          { subject: 'Networks', avg: 80 },
-        ] : undefined,
+        comparison: selectedChartsToUse.includes('comparison') ? subjectComparisonData : undefined,
       },
       students: filteredStudents.slice(0, 30).map(s => ({
         name: s.name,
@@ -306,8 +391,49 @@ export default function TeacherReports() {
                         </label>
                       ))}
                     </div>
+                    </div>
                   </div>
-                </div>
+
+                  {/* Subject Inputs - shown when comparison is selected */}
+                  {selectedCharts.includes('comparison') && (
+                    <div>
+                      <Label className="mb-3 block">Subject Names for Comparison</Label>
+                      <div className="space-y-2">
+                        {subjectInputs.map((subject, index) => (
+                          <div key={index} className="flex items-center gap-2">
+                            <Input
+                              placeholder={`Subject ${index + 1} (e.g., mc, dsa, cc)`}
+                              value={subject}
+                              onChange={(e) => handleSubjectChange(index, e.target.value)}
+                              className="flex-1"
+                            />
+                            {subjectInputs.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveSubject(index)}
+                                className="shrink-0 text-destructive hover:text-destructive"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddSubject}
+                          className="w-full mt-2"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Subject
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Enter subject keys that match your student data (e.g., 'mc', 'dsa', 's1_mc')
+                      </p>
+                    </div>
+                  )}
 
                 <div className="mt-6 space-y-3">
                   <Button 
@@ -386,13 +512,13 @@ export default function TeacherReports() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {selectedCharts.includes('attendance') && (
                     <div className="bg-muted/30 rounded-lg p-4">
-                      <h4 className="font-medium mb-4">Attendance Analysis</h4>
+                      <h4 className="font-medium mb-4">Attendance Analysis (Monthly Average)</h4>
                       <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={attendanceData.length > 0 ? attendanceData : [{ name: 'No data', attendance: 0 }]}>
+                        <BarChart data={monthlyAttendanceData.length > 0 ? monthlyAttendanceData : [{ name: 'No data', attendance: 0 }]}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                           <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} />
-                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
-                          <Tooltip />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} domain={[0, 100]} />
+                          <Tooltip formatter={(value) => [`${value}%`, 'Avg Attendance']} />
                           <Bar dataKey="attendance" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -432,21 +558,22 @@ export default function TeacherReports() {
 
                   {selectedCharts.includes('comparison') && (
                     <div className="bg-muted/30 rounded-lg p-4">
-                      <h4 className="font-medium mb-4">Subject Comparison</h4>
-                      <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={[
-                          { subject: 'DSA', avg: 82 },
-                          { subject: 'OS', avg: 78 },
-                          { subject: 'DBMS', avg: 85 },
-                          { subject: 'Networks', avg: 80 },
-                        ]}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis dataKey="subject" stroke="hsl(var(--muted-foreground))" fontSize={10} />
-                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
-                          <Tooltip />
-                          <Bar dataKey="avg" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <h4 className="font-medium mb-4">Subject Comparison (Class Average)</h4>
+                      {subjectComparisonData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={subjectComparisonData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis dataKey="subject" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                            <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                            <Tooltip formatter={(value) => [`${value}`, 'Avg Marks']} />
+                            <Bar dataKey="avg" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+                          Add subjects in the configuration panel to see comparison
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
