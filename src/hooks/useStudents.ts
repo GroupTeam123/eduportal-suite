@@ -152,10 +152,6 @@ export function useStudents(departmentId: string | null) {
       };
 
       setStudents(prev => prev.map(s => s.id === id ? transformedData : s));
-      toast({
-        title: 'Student Updated',
-        description: 'Student record has been updated.',
-      });
       return transformedData;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update student';
