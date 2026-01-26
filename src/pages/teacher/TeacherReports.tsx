@@ -504,15 +504,13 @@ export default function TeacherReports() {
                           </div>
                           <div className="flex items-center gap-1">
                             {report.status === 'draft' && (
-                              <>
-                                <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(report.id)} title="Delete Report" className="text-destructive hover:text-destructive">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                                <Button variant="ghost" size="icon" onClick={() => handleSubmitToHOD(report.id)} title="Submit to HOD">
-                                  <Send className="w-4 h-4" />
-                                </Button>
-                              </>
+                              <Button variant="ghost" size="icon" onClick={() => handleSubmitToHOD(report.id)} title="Submit to HOD">
+                                <Send className="w-4 h-4" />
+                              </Button>
                             )}
+                            <Button variant="ghost" size="icon" onClick={() => handleDeleteReport(report.id)} title="Delete Report" className="text-destructive hover:text-destructive">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" onClick={() => handleDownloadPDF(report)}>
                               <Download className="w-4 h-4" />
                             </Button>
