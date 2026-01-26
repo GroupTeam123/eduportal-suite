@@ -95,9 +95,38 @@ export function SingleStudentReport({ students, onCreateReport, onSubmitToHOD, u
     setSubjectMarks(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
   };
 
+  // Calculate average attendance from monthly data (same logic as TeacherStudents)
+  const calculateAvgAttendance = (customFields: Record<string, unknown> | null): number => {
+    if (!customFields) return 0;
+    const monthLabels = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthKeys = monthLabels.map(month => month.toLowerCase() + '_attendance');
+    let total = 0;
+    let count = 0;
+    monthKeys.forEach(key => {
+      const value = customFields[key];
+      if (value !== undefined && value !== null && value !== '') {
+        const numValue = typeof value === 'number' ? value : parseFloat(String(value));
+        if (!isNaN(numValue)) {
+          total += numValue;
+          count++;
+        }
+      }
+    });
+    return count > 0 ? Math.round(total / count) : 0;
+  };
+
+  // Use calculated average if monthly data exists, otherwise use stored attendance
+  const getDisplayAttendance = (student: StudentRecord): number => {
+    const customFields = student.custom_fields as Record<string, unknown> | null;
+    const calculatedAvg = calculateAvgAttendance(customFields);
+    return calculatedAvg > 0 ? calculatedAvg : (student.attendance || 0);
+  };
+
+  const displayAttendance = selectedStudent ? getDisplayAttendance(selectedStudent) : 0;
+
   const attendancePieData = selectedStudent ? [
-    { name: 'Present', value: selectedStudent.attendance || 0 },
-    { name: 'Absent', value: 100 - (selectedStudent.attendance || 0) },
+    { name: 'Present', value: displayAttendance },
+    { name: 'Absent', value: 100 - displayAttendance },
   ] : [];
 
   const handleGenerateReport = async () => {
@@ -164,7 +193,7 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
         studentId: selectedStudent.student_id || undefined,
         year: selectedStudent.year || undefined,
         email: selectedStudent.email || undefined,
-        attendance: selectedStudent.attendance || 0,
+        attendance: displayAttendance,
         contact: selectedStudent.contact || undefined,
         guardianName: selectedStudent.guardian_name || undefined,
         guardianPhone: selectedStudent.guardian_phone || undefined,
@@ -279,7 +308,7 @@ ${customFields.filter(f => f.label && f.value).map(f => `${f.label}: ${f.value}`
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Attendance</p>
-                  <p className="font-medium">{selectedStudent.attendance || 0}%</p>
+                  <p className="font-medium">{displayAttendance}%</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs text-muted-foreground">Email</p>
