@@ -28,6 +28,7 @@ const teacherNav: NavItem[] = [
   { label: 'Dashboard', icon: BarChart3, path: '/teacher' },
   { label: 'Students', icon: Users, path: '/teacher/students' },
   { label: 'Reports', icon: FileText, path: '/teacher/reports' },
+  { label: 'Submit Report', icon: Send, path: '/teacher/submit' },
   { label: 'About Me', icon: User, path: '/teacher/profile' },
 ];
 

@@ -12,6 +12,7 @@ import NotFound from "./pages/NotFound";
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
 import TeacherStudents from "./pages/teacher/TeacherStudents";
 import TeacherReports from "./pages/teacher/TeacherReports";
+import TeacherSubmit from "./pages/teacher/TeacherSubmit";
 import TeacherProfile from "./pages/teacher/TeacherProfile";
 
 // HOD pages
@@ -63,6 +64,7 @@ function AppRoutes() {
       <Route path="/teacher" element={<ProtectedRoute allowedRole="teacher"><TeacherDashboard /></ProtectedRoute>} />
       <Route path="/teacher/students" element={<ProtectedRoute allowedRole="teacher"><TeacherStudents /></ProtectedRoute>} />
       <Route path="/teacher/reports" element={<ProtectedRoute allowedRole="teacher"><TeacherReports /></ProtectedRoute>} />
+      <Route path="/teacher/submit" element={<ProtectedRoute allowedRole="teacher"><TeacherSubmit /></ProtectedRoute>} />
       <Route path="/teacher/profile" element={<ProtectedRoute allowedRole="teacher"><TeacherProfile /></ProtectedRoute>} />
       
       {/* HOD Routes */}
