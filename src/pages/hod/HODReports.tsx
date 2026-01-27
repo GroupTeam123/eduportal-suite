@@ -32,40 +32,49 @@ export default function HODReports() {
   };
 
   const handleDownloadPDF = (report: ReportRecord) => {
-    const chartData = report.chart_data as Record<string, unknown> | null;
-    
-    const reportData: ReportData = {
-      title: report.title || 'Department Report',
-      content: report.content || undefined,
-      generatedBy: user?.name || 'HOD',
-      date: new Date().toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      }),
-      charts: {
-        attendance: (chartData?.attendanceData as { name: string; attendance: number }[]) || [],
-        grades: (chartData?.gradeData as { name: string; value: number; color: string }[]) || [],
-        performance: (chartData?.performanceData as { month: string; score: number }[]) || [],
-      },
-      students: students.slice(0, 20).map(s => ({
-        name: s.name || 'Unknown',
-        email: s.email || undefined,
-        attendance: s.attendance || undefined,
-        guardian_name: s.guardian_name || undefined,
-      })),
-      summary: {
-        totalStudents: students.length,
-        avgAttendance: students.length > 0 
-          ? students.reduce((sum, s) => sum + (s.attendance || 0), 0) / students.length 
-          : 0,
-        highPerformers: students.filter(s => (s.attendance || 0) >= 90).length,
-        lowAttendance: students.filter(s => (s.attendance || 0) < 75).length,
-      },
-    };
+    try {
+      const chartData = report.chart_data as Record<string, unknown> | null;
+      
+      const reportData: ReportData = {
+        title: report.title || 'Department Report',
+        content: report.content || undefined,
+        generatedBy: user?.name || 'HOD',
+        date: new Date().toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        charts: {
+          attendance: (chartData?.attendanceData as { name: string; attendance: number }[]) || [],
+          grades: (chartData?.gradeData as { name: string; value: number; color: string }[]) || [],
+          performance: (chartData?.performanceData as { month: string; score: number }[]) || [],
+        },
+        students: students.slice(0, 20).map(s => ({
+          name: s.name || 'Unknown',
+          email: s.email || undefined,
+          attendance: s.attendance || undefined,
+          guardian_name: s.guardian_name || undefined,
+        })),
+        summary: {
+          totalStudents: students.length,
+          avgAttendance: students.length > 0 
+            ? students.reduce((sum, s) => sum + (s.attendance || 0), 0) / students.length 
+            : 0,
+          highPerformers: students.filter(s => (s.attendance || 0) >= 90).length,
+          lowAttendance: students.filter(s => (s.attendance || 0) < 75).length,
+        },
+      };
 
-    generateAnnualReportPDF(reportData);
-    toast({ title: 'PDF Downloaded', description: 'Report has been saved.' });
+      generateAnnualReportPDF(reportData);
+      toast({ title: 'PDF Downloaded', description: 'Report has been saved.' });
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast({ 
+        title: 'Download Failed', 
+        description: 'Could not generate the PDF. Please try again.',
+        variant: 'destructive'
+      });
+    }
   };
 
   const handleSubmitToPrincipal = async (reportId: string) => {
