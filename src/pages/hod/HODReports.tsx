@@ -160,9 +160,12 @@ export default function HODReports() {
                   <Trash2 className="w-4 h-4" />
                 </Button>
                 {report.status === 'submitted_to_hod' && (
-                  <Button size="sm" className="flex-1" onClick={() => handleSubmitToPrincipal(report.id)}>
-                    <Send className="w-4 h-4 mr-2" />
-                    Forward
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleSubmitToPrincipal(report.id)}
+                    title="Forward to Principal"
+                  >
+                    <Send className="w-4 h-4" />
                   </Button>
                 )}
                 <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownloadPDF(report)}>
