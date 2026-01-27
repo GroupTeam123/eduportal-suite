@@ -7,51 +7,55 @@ import { useReports } from '@/hooks/useReports';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useMemo } from 'react';
 
-// Month labels for attendance tracking
-const MONTH_LABELS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
+// Month configuration for attendance tracking
+const MONTHS = [
+  { full: 'january', short: 'Jan', order: 0 },
+  { full: 'february', short: 'Feb', order: 1 },
+  { full: 'march', short: 'Mar', order: 2 },
+  { full: 'april', short: 'Apr', order: 3 },
+  { full: 'may', short: 'May', order: 4 },
+  { full: 'june', short: 'Jun', order: 5 },
+  { full: 'july', short: 'Jul', order: 6 },
+  { full: 'august', short: 'Aug', order: 7 },
+  { full: 'september', short: 'Sep', order: 8 },
+  { full: 'october', short: 'Oct', order: 9 },
+  { full: 'november', short: 'Nov', order: 10 },
+  { full: 'december', short: 'Dec', order: 11 },
 ];
 
-const MONTH_ORDER: Record<string, number> = {
-  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
-  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11
-};
-
-// Helper to compute monthly attendance from custom_fields
-const computeMonthlyAttendance = (students: Array<{ custom_fields?: Record<string, unknown> }>) => {
-  const monthlyData: Record<string, { total: number; count: number }> = {};
+// Helper to compute average monthly attendance from custom_fields for a group of students
+const computeMonthlyAttendance = (students: Array<{ custom_fields?: Record<string, unknown> | null }>) => {
+  const result: Array<{ name: string; value: number }> = [];
   
-  students.forEach(student => {
-    if (student.custom_fields) {
-      MONTH_LABELS.forEach(month => {
-        const key = month.toLowerCase() + '_attendance';
-        const value = student.custom_fields?.[key];
+  MONTHS.forEach(month => {
+    const key = `${month.full}_attendance`;
+    let total = 0;
+    let count = 0;
+    
+    students.forEach(student => {
+      const customFields = student.custom_fields as Record<string, unknown> | null;
+      if (customFields) {
+        const value = customFields[key];
         if (value !== undefined && value !== null && value !== '') {
           const numValue = typeof value === 'number' ? value : parseFloat(String(value));
           if (!isNaN(numValue)) {
-            if (!monthlyData[month]) {
-              monthlyData[month] = { total: 0, count: 0 };
-            }
-            monthlyData[month].total += numValue;
-            monthlyData[month].count += 1;
+            total += numValue;
+            count += 1;
           }
         }
+      }
+    });
+    
+    // Only include months that have data
+    if (count > 0) {
+      result.push({
+        name: month.short,
+        value: Math.round(total / count)
       });
     }
   });
   
-  // Convert to chart format and sort by month order
-  return Object.entries(monthlyData)
-    .map(([name, data]) => ({
-      name: name.substring(0, 3), // Abbreviated month name (Jan, Feb, etc.)
-      value: data.count > 0 ? Math.round(data.total / data.count) : 0
-    }))
-    .sort((a, b) => {
-      const monthA = MONTH_ORDER[a.name.toLowerCase()] ?? MONTH_ORDER[Object.keys(MONTH_ORDER).find(m => m.startsWith(a.name.toLowerCase())) || ''] ?? 0;
-      const monthB = MONTH_ORDER[b.name.toLowerCase()] ?? MONTH_ORDER[Object.keys(MONTH_ORDER).find(m => m.startsWith(b.name.toLowerCase())) || ''] ?? 0;
-      return monthA - monthB;
-    });
+  return result;
 };
 
 export default function TeacherDashboard() {
