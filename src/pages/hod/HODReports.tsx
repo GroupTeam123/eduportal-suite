@@ -1,18 +1,33 @@
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useReports, ReportRecord } from '@/hooks/useReports';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Download, Eye, CheckCircle, Clock, AlertCircle, Send, Loader2, Trash2 } from 'lucide-react';
+import { FileText, Download, CheckCircle, Clock, AlertCircle, Send, Loader2, Trash2, Eye } from 'lucide-react';
 import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
 import { useStudents } from '@/hooks/useStudents';
 import { useToast } from '@/hooks/use-toast';
+import { ReportPreviewDialog } from '@/components/reports/ReportPreviewDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function HODReports() {
   const { supabaseUser, user, departmentId } = useAuth();
-  const { reports, loading, submitReport, approveReport, deleteReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
+  const { reports, loading, submitReport, deleteReport } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
   const { students } = useStudents(departmentId);
   const { toast } = useToast();
+
+  const [previewReport, setPreviewReport] = useState<ReportRecord | null>(null);
+  const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -81,8 +96,11 @@ export default function HODReports() {
     await submitReport(reportId, 'principal');
   };
 
-  const handleDeleteReport = async (reportId: string) => {
-    await deleteReport(reportId);
+  const handleDeleteConfirm = async () => {
+    if (deleteReportId) {
+      await deleteReport(deleteReportId);
+      setDeleteReportId(null);
+    }
   };
 
   if (loading) {
@@ -124,16 +142,28 @@ export default function HODReports() {
               </p>
 
               <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPreviewReport(report)}
+                  title="Preview Report"
+                >
+                  <Eye className="w-4 h-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setDeleteReportId(report.id)} 
+                  className="text-destructive hover:text-destructive"
+                  title="Delete Report"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
                 {report.status === 'submitted_to_hod' && (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => handleDeleteReport(report.id)} className="text-destructive hover:text-destructive">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                    <Button size="sm" className="flex-1" onClick={() => handleSubmitToPrincipal(report.id)}>
-                      <Send className="w-4 h-4 mr-2" />
-                      Forward
-                    </Button>
-                  </>
+                  <Button size="sm" className="flex-1" onClick={() => handleSubmitToPrincipal(report.id)}>
+                    <Send className="w-4 h-4 mr-2" />
+                    Forward
+                  </Button>
                 )}
                 <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownloadPDF(report)}>
                   <Download className="w-4 h-4 mr-2" />
@@ -149,6 +179,33 @@ export default function HODReports() {
           <p className="text-muted-foreground">No reports submitted yet.</p>
         </div>
       )}
+
+      {/* Preview Dialog */}
+      <ReportPreviewDialog
+        report={previewReport}
+        open={!!previewReport}
+        onOpenChange={(open) => !open && setPreviewReport(null)}
+        onDownload={handleDownloadPDF}
+        reporterName={user?.name}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteReportId} onOpenChange={(open) => !open && setDeleteReportId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Report</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this report? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

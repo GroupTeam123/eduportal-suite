@@ -1,18 +1,33 @@
+import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useReports, ReportRecord } from '@/hooks/useReports';
 import { usePrincipalData } from '@/hooks/usePrincipalData';
 import { useAuth } from '@/contexts/AuthContext';
-import { FileText, Download, CheckCircle, Building2, Loader2 } from 'lucide-react';
+import { FileText, Download, CheckCircle, Building2, Loader2, Eye, Trash2 } from 'lucide-react';
 import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
 import { useToast } from '@/hooks/use-toast';
+import { ReportPreviewDialog } from '@/components/reports/ReportPreviewDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function PrincipalReports() {
   const { supabaseUser, user } = useAuth();
-  const { reports, loading, approveReport } = useReports(supabaseUser?.id || null, user?.role || null, null);
+  const { reports, loading, approveReport, deleteReport } = useReports(supabaseUser?.id || null, user?.role || null, null);
   const { departments } = usePrincipalData();
   const { toast } = useToast();
+  
+  const [previewReport, setPreviewReport] = useState<ReportRecord | null>(null);
+  const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
 
   // Get department name for a report
   const getDepartmentName = (deptId: string | null) => {
@@ -69,6 +84,13 @@ export default function PrincipalReports() {
     await approveReport(reportId);
   };
 
+  const handleDeleteConfirm = async () => {
+    if (deleteReportId) {
+      await deleteReport(deleteReportId);
+      setDeleteReportId(null);
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout title="Submitted Reports" subtitle="Loading...">
@@ -108,6 +130,23 @@ export default function PrincipalReports() {
               <p className="text-sm text-muted-foreground mb-4">{new Date(report.created_at).toLocaleDateString()}</p>
 
               <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPreviewReport(report)}
+                  title="Preview Report"
+                >
+                  <Eye className="w-4 h-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setDeleteReportId(report.id)}
+                  className="text-destructive hover:text-destructive"
+                  title="Delete Report"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
                 {report.status !== 'approved' && (
                   <Button size="sm" className="flex-1" onClick={() => handleApprove(report.id)}>
                     <CheckCircle className="w-4 h-4 mr-2" />
@@ -128,6 +167,34 @@ export default function PrincipalReports() {
           <p className="text-muted-foreground">No reports submitted to you yet.</p>
         </div>
       )}
+
+      {/* Preview Dialog */}
+      <ReportPreviewDialog
+        report={previewReport}
+        open={!!previewReport}
+        onOpenChange={(open) => !open && setPreviewReport(null)}
+        onDownload={handleDownloadPDF}
+        departmentName={previewReport ? getDepartmentName(previewReport.department_id) : undefined}
+        reporterName={previewReport ? getHODName(previewReport.department_id) : undefined}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteReportId} onOpenChange={(open) => !open && setDeleteReportId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Report</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this report? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
