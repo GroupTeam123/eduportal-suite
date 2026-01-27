@@ -4,10 +4,9 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { usePrincipalData, HODInfo } from '@/hooks/usePrincipalData';
-import { useDocuments, DocumentRecord } from '@/hooks/useDocuments';
+import { DocumentRecord } from '@/hooks/useDocuments';
 import { FileText, Download, Eye, Mail, Building2, Loader2, Phone, Briefcase, GraduationCap, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface HODProfile {
   full_name: string;
@@ -19,15 +18,14 @@ interface HODProfile {
 }
 
 export default function PrincipalHODs() {
-  const { supabaseUser } = useAuth();
   const { hods, loading } = usePrincipalData();
-  const { documents, getDownloadUrl } = useDocuments(supabaseUser?.id || null, null);
   const [selectedHOD, setSelectedHOD] = useState<HODInfo | null>(null);
   const [showDocuments, setShowDocuments] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [hodDocs, setHodDocs] = useState<DocumentRecord[]>([]);
   const [hodProfile, setHodProfile] = useState<HODProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const handleViewProfile = async (hod: HODInfo) => {
     setSelectedHOD(hod);
@@ -59,17 +57,41 @@ export default function PrincipalHODs() {
     }
   };
 
-  const handleViewDocs = (hod: HODInfo) => {
+  const handleViewDocs = async (hod: HODInfo) => {
     setSelectedHOD(hod);
-    const docs = documents.filter(d => d.uploader_user_id === hod.user_id);
-    setHodDocs(docs);
     setShowDocuments(true);
+    setLoadingDocs(true);
+    
+    try {
+      // Fetch documents uploaded by this specific HOD
+      const { data, error } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('uploader_user_id', hod.user_id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setHodDocs(data || []);
+    } catch (error) {
+      console.error('Error fetching HOD documents:', error);
+      setHodDocs([]);
+    } finally {
+      setLoadingDocs(false);
+    }
   };
 
   const handleDownload = async (doc: DocumentRecord) => {
-    const url = await getDownloadUrl(doc.storage_path);
-    if (url) {
-      window.open(url, '_blank');
+    try {
+      const { data, error } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(doc.storage_path, 3600);
+      
+      if (error) throw error;
+      if (data?.signedUrl) {
+        window.open(data.signedUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error generating download URL:', error);
     }
   };
 
@@ -143,7 +165,7 @@ export default function PrincipalHODs() {
 
       {/* HOD Profile Dialog */}
       <Dialog open={showProfile} onOpenChange={setShowProfile}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>HOD Profile - {selectedHOD?.full_name}</DialogTitle>
           </DialogHeader>
@@ -246,12 +268,16 @@ export default function PrincipalHODs() {
 
       {/* Documents Dialog */}
       <Dialog open={showDocuments} onOpenChange={setShowDocuments}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Documents - {selectedHOD?.full_name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 max-h-96 overflow-y-auto">
-            {hodDocs.length > 0 ? (
+            {loadingDocs ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : hodDocs.length > 0 ? (
               hodDocs.map((doc) => (
                 <div key={doc.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center gap-3">
