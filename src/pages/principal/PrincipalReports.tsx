@@ -153,9 +153,13 @@ export default function PrincipalReports() {
                     Approve
                   </Button>
                 )}
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownloadPDF(report)}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Download
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleDownloadPDF(report)}
+                  title="Download Report"
+                >
+                  <Download className="w-4 h-4" />
                 </Button>
               </div>
             </Card>
