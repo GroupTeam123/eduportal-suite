@@ -42,7 +42,6 @@ const principalNav: NavItem[] = [
   { label: 'HOD Data', icon: GraduationCap, path: '/principal/hods' },
   { label: 'Teacher Data', icon: Users, path: '/principal/teachers' },
   { label: 'Reports', icon: FolderOpen, path: '/principal/reports' },
-  { label: 'HOD Documents', icon: FileText, path: '/principal/documents' },
 ];
 
 export function DashboardSidebar() {

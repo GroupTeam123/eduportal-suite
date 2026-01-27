@@ -81,6 +81,10 @@ function drawHeader(
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
   
+  // Ensure strings are valid for jsPDF.text
+  const safeTitle = title || 'Report';
+  const safeSubtitle = subtitle || '';
+  
   // Header background with gradient effect
   doc.setFillColor(PRIMARY_COLOR.r, PRIMARY_COLOR.g, PRIMARY_COLOR.b);
   doc.rect(0, 0, pageWidth, 50, 'F');
@@ -103,12 +107,12 @@ function drawHeader(
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(22);
   doc.setFont('helvetica', 'bold');
-  doc.text(title, margin, titleY);
+  doc.text(safeTitle, margin, titleY);
   
   // Subtitle
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(subtitle, margin, titleY + 8);
+  doc.text(safeSubtitle, margin, titleY + 8);
   
   return 60; // Return Y position after header
 }
