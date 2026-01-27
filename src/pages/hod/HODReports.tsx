@@ -35,7 +35,7 @@ export default function HODReports() {
     const chartData = report.chart_data as Record<string, unknown> | null;
     
     const reportData: ReportData = {
-      title: report.title,
+      title: report.title || 'Department Report',
       content: report.content || undefined,
       generatedBy: user?.name || 'HOD',
       date: new Date().toLocaleDateString('en-US', { 
@@ -44,12 +44,12 @@ export default function HODReports() {
         day: 'numeric' 
       }),
       charts: {
-        attendance: chartData?.attendanceData as { name: string; attendance: number }[] || [],
-        grades: chartData?.gradeData as { name: string; value: number; color: string }[] || [],
-        performance: chartData?.performanceData as { month: string; score: number }[] || [],
+        attendance: (chartData?.attendanceData as { name: string; attendance: number }[]) || [],
+        grades: (chartData?.gradeData as { name: string; value: number; color: string }[]) || [],
+        performance: (chartData?.performanceData as { month: string; score: number }[]) || [],
       },
       students: students.slice(0, 20).map(s => ({
-        name: s.name,
+        name: s.name || 'Unknown',
         email: s.email || undefined,
         attendance: s.attendance || undefined,
         guardian_name: s.guardian_name || undefined,

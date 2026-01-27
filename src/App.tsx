@@ -28,7 +28,6 @@ import PrincipalDepartments from "./pages/principal/PrincipalDepartments";
 import PrincipalHODs from "./pages/principal/PrincipalHODs";
 import PrincipalTeachers from "./pages/principal/PrincipalTeachers";
 import PrincipalReports from "./pages/principal/PrincipalReports";
-import PrincipalDocuments from "./pages/principal/PrincipalDocuments";
 
 const queryClient = new QueryClient();
 
@@ -80,7 +79,6 @@ function AppRoutes() {
       <Route path="/principal/hods" element={<ProtectedRoute allowedRole="principal"><PrincipalHODs /></ProtectedRoute>} />
       <Route path="/principal/teachers" element={<ProtectedRoute allowedRole="principal"><PrincipalTeachers /></ProtectedRoute>} />
       <Route path="/principal/reports" element={<ProtectedRoute allowedRole="principal"><PrincipalReports /></ProtectedRoute>} />
-      <Route path="/principal/documents" element={<ProtectedRoute allowedRole="principal"><PrincipalDocuments /></ProtectedRoute>} />
       
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -30,20 +30,23 @@ export default function PrincipalReports() {
   const handleDownloadPDF = (report: ReportRecord) => {
     const chartData = report.chart_data as Record<string, unknown> | null;
     
+    const hodName = getHODName(report.department_id);
+    const deptName = getDepartmentName(report.department_id);
+    
     const reportData: ReportData = {
-      title: report.title,
+      title: report.title || 'Department Report',
       content: report.content || undefined,
-      generatedBy: getHODName(report.department_id),
-      department: getDepartmentName(report.department_id),
+      generatedBy: hodName || 'HOD',
+      department: deptName || 'Department',
       date: new Date().toLocaleDateString('en-US', { 
         year: 'numeric', 
         month: 'long', 
         day: 'numeric' 
       }),
       charts: {
-        attendance: chartData?.attendanceData as { name: string; attendance: number }[] || [],
-        grades: chartData?.gradeData as { name: string; value: number; color: string }[] || [],
-        performance: chartData?.performanceData as { month: string; score: number }[] || [],
+        attendance: (chartData?.attendanceData as { name: string; attendance: number }[]) || [],
+        grades: (chartData?.gradeData as { name: string; value: number; color: string }[]) || [],
+        performance: (chartData?.performanceData as { month: string; score: number }[]) || [],
       },
       students: [],
       summary: undefined,
