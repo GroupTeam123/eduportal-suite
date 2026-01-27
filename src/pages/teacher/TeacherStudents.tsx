@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, Plus, Loader2, Download, FileSpreadsheet, AlertCircle, CheckCircle, Columns, X, RefreshCw, Check } from 'lucide-react';
+import { Upload, Plus, Loader2, Download, FileSpreadsheet, AlertCircle, CheckCircle, Columns, X, RefreshCw, Check, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { parseExcelFile, generateSampleExcel, ParsedExcelResult } from '@/utils/excelParser';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -45,6 +46,8 @@ export default function TeacherStudents() {
   const [selectedTab, setSelectedTab] = useState<string>('1');
   const [customColumnsByYear, setCustomColumnsByYear] = useState<YearCustomColumns>({ 1: [], 2: [], 3: [], 4: [] });
   const [newColumnName, setNewColumnName] = useState('');
+  const [deleteColumnMode, setDeleteColumnMode] = useState<Record<number, boolean>>({ 1: false, 2: false, 3: false, 4: false });
+  const [selectedColumnsToDelete, setSelectedColumnsToDelete] = useState<Record<number, Set<string>>>({ 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set() });
   const [importState, setImportState] = useState<{
     status: 'idle' | 'parsing' | 'preview' | 'importing' | 'complete';
     result: ParsedExcelResult | null;
@@ -296,6 +299,77 @@ export default function TeacherStudents() {
     });
   };
 
+  const toggleDeleteColumnMode = (year: number) => {
+    setDeleteColumnMode(prev => ({
+      ...prev,
+      [year]: !prev[year]
+    }));
+    // Clear selections when exiting delete mode
+    if (deleteColumnMode[year]) {
+      setSelectedColumnsToDelete(prev => ({
+        ...prev,
+        [year]: new Set()
+      }));
+    }
+  };
+
+  const toggleColumnSelection = (year: number, columnName: string) => {
+    setSelectedColumnsToDelete(prev => {
+      const currentSet = new Set(prev[year]);
+      if (currentSet.has(columnName)) {
+        currentSet.delete(columnName);
+      } else {
+        currentSet.add(columnName);
+      }
+      return { ...prev, [year]: currentSet };
+    });
+  };
+
+  const handleDeleteSelectedColumns = async (year: number, yearStudents: StudentRecord[]) => {
+    const columnsToDelete = selectedColumnsToDelete[year];
+    if (columnsToDelete.size === 0) {
+      toast({
+        title: 'No columns selected',
+        description: 'Please select at least one column to delete.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Remove from custom columns state (temporary columns)
+    setCustomColumnsByYear(prev => ({
+      ...prev,
+      [year]: (prev[year] || []).filter(c => !columnsToDelete.has(c.name))
+    }));
+
+    // Remove from student records (saved columns in database)
+    for (const student of yearStudents) {
+      const customFields = student.custom_fields as Record<string, unknown> | null;
+      if (customFields) {
+        const updatedCustomFields = { ...customFields };
+        let hasChanges = false;
+        columnsToDelete.forEach(colName => {
+          if (colName in updatedCustomFields) {
+            delete updatedCustomFields[colName];
+            hasChanges = true;
+          }
+        });
+        if (hasChanges) {
+          await updateStudent(student.id, { custom_fields: updatedCustomFields });
+        }
+      }
+    }
+
+    toast({
+      title: 'Columns Deleted',
+      description: `${columnsToDelete.size} column(s) have been deleted.`,
+    });
+
+    // Reset delete mode and selections
+    setDeleteColumnMode(prev => ({ ...prev, [year]: false }));
+    setSelectedColumnsToDelete(prev => ({ ...prev, [year]: new Set() }));
+  };
+
   // Get saved columns from existing student custom_fields (columns that have data)
   const getSavedColumnsFromData = (yearStudents: StudentRecord[]) => {
     const savedCols = new Set<string>();
@@ -348,35 +422,72 @@ export default function TeacherStudents() {
 
   const renderStudentTable = (yearStudents: StudentRecord[], year: number) => {
     const monthlyColumnsWithData = getMonthlyColumnsWithData(yearStudents);
+    const isInDeleteMode = deleteColumnMode[year];
+    const selectedCols = selectedColumnsToDelete[year];
+    
+    // Get all deletable columns (custom columns - not base form fields)
+    const getDeletableColumns = () => {
+      const sessionColNames = getCustomColumnsForYear(year).map(c => c.name);
+      const savedCols = getSavedColumnsFromData(yearStudents).filter(
+        colName => !sessionColNames.map(s => s.toLowerCase()).includes(colName.toLowerCase())
+      );
+      const allDeletable = [...savedCols, ...sessionColNames];
+      return allDeletable;
+    };
     
     return (
       <div className="space-y-4">
         <div className="flex justify-end gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline">
-                <Columns className="w-4 h-4 mr-2" />
-                Add Column
+          {isInDeleteMode ? (
+            <>
+              <Button 
+                variant="destructive" 
+                onClick={() => handleDeleteSelectedColumns(year, yearStudents)}
+                disabled={selectedCols.size === 0}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete Selected ({selectedCols.size})
               </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64 bg-background border shadow-lg">
-              <div className="space-y-3">
-                <Label>Column Name</Label>
-                <Input
-                  placeholder="e.g., Semester Marks"
-                  value={newColumnName}
-                  onChange={(e) => setNewColumnName(e.target.value)}
-                />
-                <Button size="sm" onClick={handleAddColumn} disabled={!newColumnName.trim()}>
-                  Add Column
+              <Button variant="outline" onClick={() => toggleDeleteColumnMode(year)}>
+                <X className="w-4 h-4 mr-2" />
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <>
+              {getDeletableColumns().length > 0 && (
+                <Button variant="outline" onClick={() => toggleDeleteColumnMode(year)}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Column
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-          <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import Excel
-          </Button>
+              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline">
+                    <Columns className="w-4 h-4 mr-2" />
+                    Add Column
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 bg-background border shadow-lg">
+                  <div className="space-y-3">
+                    <Label>Column Name</Label>
+                    <Input
+                      placeholder="e.g., Semester Marks"
+                      value={newColumnName}
+                      onChange={(e) => setNewColumnName(e.target.value)}
+                    />
+                    <Button size="sm" onClick={handleAddColumn} disabled={!newColumnName.trim()}>
+                      Add Column
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <Button variant="outline" onClick={() => setIsImportDialogOpen(true)}>
+                <Upload className="w-4 h-4 mr-2" />
+                Import Excel
+              </Button>
+            </>
+          )}
         </div>
         {yearStudents.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
@@ -408,7 +519,15 @@ export default function TeacherStudents() {
                       .filter(colName => !sessionColNames.includes(colName.toLowerCase()))
                       .map(colName => (
                         <TableHead key={colName} className="font-semibold">
-                          {colName}
+                          <div className="flex items-center gap-2">
+                            {isInDeleteMode && (
+                              <Checkbox
+                                checked={selectedCols.has(colName)}
+                                onCheckedChange={() => toggleColumnSelection(year, colName)}
+                              />
+                            )}
+                            {colName}
+                          </div>
                         </TableHead>
                       ));
                   })()}
@@ -416,32 +535,50 @@ export default function TeacherStudents() {
                   {getCustomColumnsForYear(year).filter(col => !col.isSaved).map(col => (
                     <TableHead key={col.id} className="font-semibold">
                       <div className="flex items-center gap-2">
+                        {isInDeleteMode && (
+                          <Checkbox
+                            checked={selectedCols.has(col.name)}
+                            onCheckedChange={() => toggleColumnSelection(year, col.name)}
+                          />
+                        )}
                         {col.name}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5 text-success hover:text-success hover:bg-success/10"
-                          onClick={() => handleSaveColumn(col.id, year)}
-                          title="Save column permanently"
-                        >
-                          <Check className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5 text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveColumn(col.id, year)}
-                          title="Remove column"
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
+                        {!isInDeleteMode && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-success hover:text-success hover:bg-success/10"
+                              onClick={() => handleSaveColumn(col.id, year)}
+                              title="Save column permanently"
+                            >
+                              <Check className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-destructive hover:text-destructive"
+                              onClick={() => handleRemoveColumn(col.id, year)}
+                              title="Remove column"
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </TableHead>
                   ))}
                   {/* Saved custom columns from this session for this year */}
                   {getCustomColumnsForYear(year).filter(col => col.isSaved).map(col => (
                     <TableHead key={col.id} className="font-semibold">
-                      {col.name}
+                      <div className="flex items-center gap-2">
+                        {isInDeleteMode && (
+                          <Checkbox
+                            checked={selectedCols.has(col.name)}
+                            onCheckedChange={() => toggleColumnSelection(year, col.name)}
+                          />
+                        )}
+                        {col.name}
+                      </div>
                     </TableHead>
                   ))}
                   <TableHead className="font-semibold text-right">Actions</TableHead>
