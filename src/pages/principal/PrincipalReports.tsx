@@ -28,32 +28,41 @@ export default function PrincipalReports() {
   };
 
   const handleDownloadPDF = (report: ReportRecord) => {
-    const chartData = report.chart_data as Record<string, unknown> | null;
-    
-    const hodName = getHODName(report.department_id);
-    const deptName = getDepartmentName(report.department_id);
-    
-    const reportData: ReportData = {
-      title: report.title || 'Department Report',
-      content: report.content || undefined,
-      generatedBy: hodName || 'HOD',
-      department: deptName || 'Department',
-      date: new Date().toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      }),
-      charts: {
-        attendance: (chartData?.attendanceData as { name: string; attendance: number }[]) || [],
-        grades: (chartData?.gradeData as { name: string; value: number; color: string }[]) || [],
-        performance: (chartData?.performanceData as { month: string; score: number }[]) || [],
-      },
-      students: [],
-      summary: undefined,
-    };
+    try {
+      const chartData = report.chart_data as Record<string, unknown> | null;
+      
+      const hodName = getHODName(report.department_id) || 'HOD';
+      const deptName = getDepartmentName(report.department_id) || 'Department';
+      
+      const reportData: ReportData = {
+        title: report.title || 'Department Report',
+        content: report.content || undefined,
+        generatedBy: hodName,
+        department: deptName,
+        date: new Date().toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        charts: {
+          attendance: (chartData?.attendanceData as { name: string; attendance: number }[]) || [],
+          grades: (chartData?.gradeData as { name: string; value: number; color: string }[]) || [],
+          performance: (chartData?.performanceData as { month: string; score: number }[]) || [],
+        },
+        students: [],
+        summary: undefined,
+      };
 
-    generateAnnualReportPDF(reportData);
-    toast({ title: 'PDF Downloaded', description: 'Report has been saved.' });
+      generateAnnualReportPDF(reportData);
+      toast({ title: 'PDF Downloaded', description: 'Report has been saved.' });
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      toast({ 
+        title: 'Download Failed', 
+        description: 'Could not generate the PDF. Please try again.',
+        variant: 'destructive'
+      });
+    }
   };
 
   const handleApprove = async (reportId: string) => {
