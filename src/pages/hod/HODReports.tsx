@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useReports, ReportRecord } from '@/hooks/useReports';
 import { useAuth } from '@/contexts/AuthContext';
 import { FileText, Download, CheckCircle, Clock, AlertCircle, Send, Loader2, Trash2, Eye } from 'lucide-react';
-import { generateAnnualReportPDF, ReportData } from '@/utils/pdfGenerator';
+import { generateAnnualReportPDF, generateSingleStudentReportPDF, ReportData, SingleStudentReportData } from '@/utils/pdfGenerator';
 import { useStudents } from '@/hooks/useStudents';
 import { useToast } from '@/hooks/use-toast';
 import { ReportPreviewDialog } from '@/components/reports/ReportPreviewDialog';
@@ -49,7 +49,37 @@ export default function HODReports() {
   const handleDownloadPDF = (report: ReportRecord) => {
     try {
       const chartData = report.chart_data as Record<string, unknown> | null;
+      const reportType = chartData?.type as string;
       
+      // Handle single student reports
+      if (reportType === 'single_student') {
+        const studentReportData: SingleStudentReportData = {
+          title: report.title || 'Student Report',
+          generatedBy: user?.name || 'Teacher',
+          date: new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          }),
+          student: {
+            name: (chartData?.studentName as string) || 'Unknown Student',
+            studentId: (chartData?.studentStudentId as string) || undefined,
+            year: undefined,
+            email: undefined,
+            attendance: (chartData?.attendanceData as { name: string; value: number }[])?.find(d => d.name === 'Present')?.value || 0,
+          },
+          customFields: (chartData?.customFields as { label: string; value: string }[]) || [],
+          subjectMarks: (chartData?.subjectMarks as { subject: string; marks: number; outOf: number }[]) || [],
+          progressData: (chartData?.progressData as { month: string; score: number }[]) || [],
+          selectedCharts: (chartData?.selectedCharts as string[]) || [],
+        };
+
+        generateSingleStudentReportPDF(studentReportData);
+        toast({ title: 'PDF Downloaded', description: 'Student report has been saved.' });
+        return;
+      }
+      
+      // Handle class reports
       const reportData: ReportData = {
         title: report.title || 'Department Report',
         content: report.content || undefined,
