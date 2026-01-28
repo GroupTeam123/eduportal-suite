@@ -51,12 +51,13 @@ export default function HODReports() {
       const chartData = report.chart_data as Record<string, unknown> | null;
       const reportType = chartData?.type as string;
       
-      // Handle single student reports
+      // Handle single student reports - use exact stored data
       if (reportType === 'single_student') {
         const studentReportData: SingleStudentReportData = {
           title: report.title || 'Student Report',
-          generatedBy: user?.name || 'Teacher',
-          date: new Date().toLocaleDateString('en-US', { 
+          generatedBy: (chartData?.generatedBy as string) || user?.name || 'Teacher',
+          description: report.content || undefined,
+          date: new Date(report.created_at).toLocaleDateString('en-US', { 
             year: 'numeric', 
             month: 'long', 
             day: 'numeric' 
@@ -64,12 +65,16 @@ export default function HODReports() {
           student: {
             name: (chartData?.studentName as string) || 'Unknown Student',
             studentId: (chartData?.studentStudentId as string) || undefined,
-            year: undefined,
-            email: undefined,
+            year: (chartData?.studentYear as number) || undefined,
+            email: (chartData?.studentEmail as string) || undefined,
+            contact: (chartData?.studentContact as number) || undefined,
+            guardianName: (chartData?.guardianName as string) || undefined,
+            guardianPhone: (chartData?.guardianPhone as string) || undefined,
             attendance: (chartData?.attendanceData as { name: string; value: number }[])?.find(d => d.name === 'Present')?.value || 0,
           },
           customFields: (chartData?.customFields as { label: string; value: string }[]) || [],
           subjectMarks: (chartData?.subjectMarks as { subject: string; marks: number; outOf: number }[]) || [],
+          monthlyAttendance: (chartData?.monthlyAttendance as { month: string; attendance: number }[]) || [],
           progressData: (chartData?.progressData as { month: string; score: number }[]) || [],
           selectedCharts: (chartData?.selectedCharts as string[]) || [],
         };
@@ -79,35 +84,35 @@ export default function HODReports() {
         return;
       }
       
-      // Handle class reports
+      // Handle class reports - use exact stored data from teacher
+      const selectedChartsFromData = (chartData?.selectedCharts as string[]) || [];
+      
       const reportData: ReportData = {
         title: report.title || 'Department Report',
         content: report.content || undefined,
-        generatedBy: user?.name || 'HOD',
-        date: new Date().toLocaleDateString('en-US', { 
+        generatedBy: (chartData?.generatedBy as string) || user?.name || 'Teacher',
+        department: (chartData?.department as string) || undefined,
+        date: new Date(report.created_at).toLocaleDateString('en-US', { 
           year: 'numeric', 
           month: 'long', 
           day: 'numeric' 
         }),
         charts: {
-          attendance: (chartData?.attendanceData as { name: string; attendance: number }[]) || [],
-          grades: (chartData?.gradeData as { name: string; value: number; color: string }[]) || [],
-          performance: (chartData?.performanceData as { month: string; score: number }[]) || [],
+          attendance: selectedChartsFromData.includes('attendance') 
+            ? (chartData?.attendanceData as { name: string; attendance: number }[]) || [] 
+            : undefined,
+          grades: selectedChartsFromData.includes('grades') 
+            ? (chartData?.gradeData as { name: string; value: number; color: string }[]) || [] 
+            : undefined,
+          performance: selectedChartsFromData.includes('performance') 
+            ? (chartData?.performanceData as { month: string; score: number }[]) || [] 
+            : undefined,
+          comparison: selectedChartsFromData.includes('comparison') 
+            ? (chartData?.subjectComparisonData as { subject: string; avg: number }[]) || [] 
+            : undefined,
         },
-        students: students.slice(0, 20).map(s => ({
-          name: s.name || 'Unknown',
-          email: s.email || undefined,
-          attendance: s.attendance || undefined,
-          guardian_name: s.guardian_name || undefined,
-        })),
-        summary: {
-          totalStudents: students.length,
-          avgAttendance: students.length > 0 
-            ? students.reduce((sum, s) => sum + (s.attendance || 0), 0) / students.length 
-            : 0,
-          highPerformers: students.filter(s => (s.attendance || 0) >= 90).length,
-          lowAttendance: students.filter(s => (s.attendance || 0) < 75).length,
-        },
+        students: (chartData?.students as { student_id?: string; name: string; email?: string; contact?: number; attendance?: number }[]) || [],
+        summary: (chartData?.summary as { totalStudents: number; avgAttendance: number; highPerformers: number; lowAttendance: number }) || undefined,
       };
 
       generateAnnualReportPDF(reportData);
