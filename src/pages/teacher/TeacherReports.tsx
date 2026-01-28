@@ -182,6 +182,41 @@ export default function TeacherReports() {
     
     setIsGenerating(true);
     
+    // Calculate summary from filtered students
+    const totalStudents = filteredStudents.length;
+    const avgAttendance = filteredStudents.length > 0 
+      ? filteredStudents.reduce((sum, s) => sum + (s.attendance || 0), 0) / filteredStudents.length 
+      : 0;
+    const highPerformers = filteredStudents.filter(s => (s.attendance || 0) >= 90).length;
+    const lowAttendance = filteredStudents.filter(s => (s.attendance || 0) < 75).length;
+
+    // Prepare students data with calculated average attendance
+    const studentsData = filteredStudents.slice(0, 30).map(s => {
+      const customFields = s.custom_fields as Record<string, unknown> | null;
+      let studentAvgAttendance = s.attendance || 0;
+      
+      if (customFields) {
+        const monthlyValues: number[] = [];
+        MONTH_KEYS.forEach(({ key }) => {
+          if (customFields[key] !== undefined && customFields[key] !== null) {
+            const val = Number(customFields[key]);
+            if (!isNaN(val)) monthlyValues.push(val);
+          }
+        });
+        if (monthlyValues.length > 0) {
+          studentAvgAttendance = monthlyValues.reduce((sum, v) => sum + v, 0) / monthlyValues.length;
+        }
+      }
+
+      return {
+        student_id: s.student_id || undefined,
+        name: s.name,
+        email: s.email || undefined,
+        contact: s.contact || undefined,
+        attendance: studentAvgAttendance,
+      };
+    });
+
     const chartData = {
       type: 'class_report',
       selectedYear,
@@ -190,7 +225,15 @@ export default function TeacherReports() {
       subjectComparisonData,
       gradeData,
       performanceData,
+      generatedBy: user?.name || 'Teacher',
       generatedAt: new Date().toISOString(),
+      students: studentsData,
+      summary: {
+        totalStudents,
+        avgAttendance,
+        highPerformers,
+        lowAttendance,
+      },
     };
 
     const result = await createReport({

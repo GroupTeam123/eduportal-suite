@@ -141,16 +141,37 @@ export function SingleStudentReport({ students, onCreateReport, onSubmitToHOD, u
 
     setIsGenerating(true);
 
+    // Get monthly attendance data
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const studentCustomFields = selectedStudent.custom_fields as Record<string, unknown> || {};
+    const monthlyAttendance = months
+      .map(month => {
+        const directValue = studentCustomFields[month];
+        const snakeCaseKey = `${month.toLowerCase()}_attendance`;
+        const snakeCaseValue = studentCustomFields[snakeCaseKey];
+        const value = directValue ?? snakeCaseValue;
+        return { month, value };
+      })
+      .filter(item => item.value !== undefined && item.value !== null)
+      .map(item => ({ month: item.month.substring(0, 3), attendance: Number(item.value) || 0 }));
+
     const chartData = {
       type: 'single_student',
       studentId: selectedStudent.id,
       studentName: selectedStudent.name,
       studentStudentId: selectedStudent.student_id,
+      studentYear: selectedStudent.year,
+      studentEmail: selectedStudent.email,
+      studentContact: selectedStudent.contact,
+      guardianName: selectedStudent.guardian_name,
+      guardianPhone: selectedStudent.guardian_phone,
       selectedCharts,
       attendanceData: attendancePieData,
-      subjectMarks,
+      subjectMarks: subjectMarks.filter(s => s.subject),
       progressData,
-      customFields: customFields.filter(f => f.label && f.value),
+      monthlyAttendance,
+      customFields: customFields.filter(f => f.label && f.value).map(f => ({ label: f.label, value: f.value })),
+      generatedBy: userName,
       generatedAt: new Date().toISOString(),
     };
 
