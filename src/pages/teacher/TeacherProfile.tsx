@@ -54,10 +54,17 @@ export default function TeacherProfile() {
     }
   };
 
-  const handleDownload = async (storagePath: string) => {
+  const handleDownload = async (storagePath: string, fileName: string) => {
     const url = await getDownloadUrl(storagePath);
     if (url) {
-      window.open(url, '_blank');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
@@ -243,7 +250,7 @@ export default function TeacherProfile() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleDownload(doc.storage_path)}>
+                      <Button variant="ghost" size="icon" onClick={() => handleDownload(doc.storage_path, doc.file_name)}>
                         <Download className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteDocument(doc.id)} className="text-destructive hover:text-destructive">

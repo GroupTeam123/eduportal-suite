@@ -62,6 +62,7 @@ export default function HODProfile() {
       link.href = url;
       link.download = doc.file_name;
       link.target = '_blank';
+      link.rel = 'noopener noreferrer';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

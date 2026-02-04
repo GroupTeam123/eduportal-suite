@@ -151,7 +151,14 @@ export default function PrincipalTeachers() {
         .createSignedUrl(doc.storage_path, 3600);
 
       if (data?.signedUrl) {
-        window.open(data.signedUrl, '_blank');
+        const link = document.createElement('a');
+        link.href = data.signedUrl;
+        link.download = doc.file_name;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
     } catch (error) {
       console.error('Error downloading document:', error);
