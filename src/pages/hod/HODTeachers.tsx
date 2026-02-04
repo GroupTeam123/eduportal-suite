@@ -108,7 +108,14 @@ export default function HODTeachers() {
   const handleDownload = async (doc: DocumentRecord) => {
     const url = await getDownloadUrl(doc.storage_path);
     if (url) {
-      window.open(url, '_blank');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.file_name;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
