@@ -99,6 +99,7 @@ export type Database = {
           marks: Json | null
           name: string
           notes: string | null
+          semester: number | null
           student_id: string | null
           teacher_user_id: string
           updated_at: string
@@ -117,6 +118,7 @@ export type Database = {
           marks?: Json | null
           name: string
           notes?: string | null
+          semester?: number | null
           student_id?: string | null
           teacher_user_id: string
           updated_at?: string
@@ -135,6 +137,7 @@ export type Database = {
           marks?: Json | null
           name?: string
           notes?: string | null
+          semester?: number | null
           student_id?: string | null
           teacher_user_id?: string
           updated_at?: string
@@ -256,6 +259,7 @@ export type Database = {
           marks: Json | null
           name: string
           notes: string | null
+          semester: number | null
           student_id: string | null
           teacher_user_id: string
           updated_at: string
@@ -274,6 +278,7 @@ export type Database = {
           marks?: Json | null
           name: string
           notes?: string | null
+          semester?: number | null
           student_id?: string | null
           teacher_user_id: string
           updated_at?: string
@@ -292,6 +297,7 @@ export type Database = {
           marks?: Json | null
           name?: string
           notes?: string | null
+          semester?: number | null
           student_id?: string | null
           teacher_user_id?: string
           updated_at?: string

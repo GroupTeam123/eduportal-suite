@@ -15,6 +15,7 @@ export interface StudentRecord {
   guardian_phone: string | null;
   notes: string | null;
   year: number | null;
+  semester: number | null;
   student_id: string | null;
   custom_fields: Record<string, unknown> | null;
   marks: Record<string, unknown> | null;
@@ -31,6 +32,7 @@ export interface NewStudentRecord {
   guardian_phone?: string;
   notes?: string;
   year?: number;
+  semester?: number;
   student_id?: string;
   custom_fields?: Record<string, unknown>;
   marks?: Record<string, unknown>;
