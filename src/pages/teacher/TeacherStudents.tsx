@@ -28,14 +28,27 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 const YEAR_LABELS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
+const getGlobalSemester = (year: number, sem: number) => (year - 1) * 2 + sem;
+const getSemesterKey = (year: number, sem: number) => `${year}-${sem}`;
+
 interface CustomColumn {
   id: string;
   name: string;
   isSaved: boolean;
 }
 
-// Year-specific custom columns: { 1: [...], 2: [...], 3: [...], 4: [...] }
-type YearCustomColumns = Record<number, CustomColumn[]>;
+// Semester-specific custom columns keyed by "year-sem" e.g. "1-1", "1-2"
+type SemesterCustomColumns = Record<string, CustomColumn[]>;
+
+const initSemesterRecord = <T,>(defaultValue: () => T): Record<string, T> => {
+  const record: Record<string, T> = {};
+  for (let year = 1; year <= 4; year++) {
+    for (let sem = 1; sem <= 2; sem++) {
+      record[getSemesterKey(year, sem)] = defaultValue();
+    }
+  }
+  return record;
+};
 
 export default function TeacherStudents() {
   const { user, supabaseUser, departmentId } = useAuth();
@@ -44,10 +57,11 @@ export default function TeacherStudents() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>('1');
-  const [customColumnsByYear, setCustomColumnsByYear] = useState<YearCustomColumns>({ 1: [], 2: [], 3: [], 4: [] });
+  const [selectedSemester, setSelectedSemester] = useState<string>('1');
+  const [customColumnsBySemester, setCustomColumnsBySemester] = useState<SemesterCustomColumns>(initSemesterRecord(() => []));
   const [newColumnName, setNewColumnName] = useState('');
-  const [deleteColumnMode, setDeleteColumnMode] = useState<Record<number, boolean>>({ 1: false, 2: false, 3: false, 4: false });
-  const [selectedColumnsToDelete, setSelectedColumnsToDelete] = useState<Record<number, Set<string>>>({ 1: new Set(), 2: new Set(), 3: new Set(), 4: new Set() });
+  const [deleteColumnMode, setDeleteColumnMode] = useState<Record<string, boolean>>(initSemesterRecord(() => false));
+  const [selectedColumnsToDelete, setSelectedColumnsToDelete] = useState<Record<string, Set<string>>>(initSemesterRecord(() => new Set()));
   const [importState, setImportState] = useState<{
     status: 'idle' | 'parsing' | 'preview' | 'importing' | 'complete';
     result: ParsedExcelResult | null;
@@ -62,6 +76,7 @@ export default function TeacherStudents() {
     guardian_phone: '',
     notes: '',
     year: 1,
+    semester: 1,
     student_id: '',
     custom_fields: {},
     marks: {},
@@ -74,9 +89,9 @@ export default function TeacherStudents() {
   ];
 
   // Get all monthly attendance columns that have data in any student
-  const getMonthlyColumnsWithData = (yearStudents: StudentRecord[]) => {
+  const getMonthlyColumnsWithData = (semStudents: StudentRecord[]) => {
     const monthsWithData = new Set<string>();
-    yearStudents.forEach(student => {
+    semStudents.forEach(student => {
       const customFields = student.custom_fields as Record<string, unknown> | null;
       if (customFields) {
         MONTH_LABELS.forEach(month => {
@@ -91,21 +106,15 @@ export default function TeacherStudents() {
   };
   const { toast } = useToast();
 
-  // Filter students by year
-  const getStudentsByYear = (year: number) => {
-    return students.filter(s => (s.year || 1) === year);
+  // Filter students by year and semester
+  const getStudentsBySemester = (year: number, semester: number) => {
+    return students.filter(s => (s.year || 1) === year && (s.semester || 1) === semester);
   };
 
   const handleAdd = () => {
-    if (selectedTab === 'imported') {
-      toast({
-        title: 'Cannot add to Imported',
-        description: 'Use Import Excel to add students to the Imported table.',
-        variant: 'destructive',
-      });
-      return;
-    }
     setEditingStudent(null);
+    const currentYear = parseInt(selectedTab);
+    const currentSem = parseInt(selectedSemester);
     setFormData({
       name: '',
       email: '',
@@ -114,7 +123,8 @@ export default function TeacherStudents() {
       guardian_name: '',
       guardian_phone: '',
       notes: '',
-      year: parseInt(selectedTab),
+      year: currentYear,
+      semester: currentSem,
       student_id: '',
       custom_fields: {},
       marks: {},
@@ -134,6 +144,7 @@ export default function TeacherStudents() {
       guardian_phone: student.guardian_phone || '',
       notes: student.notes || '',
       year: student.year || 1,
+      semester: student.semester || 1,
       student_id: student.student_id || '',
       custom_fields: student.custom_fields || {},
       marks: student.marks || {},
@@ -213,14 +224,16 @@ export default function TeacherStudents() {
 
     const data = importState.result.data;
     const currentYear = parseInt(selectedTab);
+    const currentSemester = parseInt(selectedSemester);
     
-    // Import directly to student_records with the current year
-    const studentsWithYear = data.map(s => ({
+    // Import directly to student_records with the current year and semester
+    const studentsWithYearSem = data.map(s => ({
       ...s,
       year: currentYear,
+      semester: currentSemester,
     }));
     
-    await importStudents(studentsWithYear as NewStudentRecord[], supabaseUser.id);
+    await importStudents(studentsWithYearSem as NewStudentRecord[], supabaseUser.id);
 
     setImportState({ status: 'complete', result: importState.result, progress: 100 });
 
@@ -242,15 +255,17 @@ export default function TeacherStudents() {
     setImportState({ status: 'idle', result: null, progress: 0 });
   };
 
-  // Get custom columns for current year
-  const getCustomColumnsForYear = (year: number): CustomColumn[] => {
-    return customColumnsByYear[year] || [];
+  // Get custom columns for current semester slot
+  const getCustomColumnsForSlot = (year: number, semester: number): CustomColumn[] => {
+    return customColumnsBySemester[getSemesterKey(year, semester)] || [];
   };
 
   const handleAddColumn = () => {
     if (!newColumnName.trim()) return;
     const currentYear = parseInt(selectedTab);
-    const currentCols = getCustomColumnsForYear(currentYear);
+    const currentSem = parseInt(selectedSemester);
+    const key = getSemesterKey(currentYear, currentSem);
+    const currentCols = getCustomColumnsForSlot(currentYear, currentSem);
     
     // Check if column already exists (prevent duplicates)
     const columnExists = currentCols.some(c => c.name.toLowerCase() === newColumnName.trim().toLowerCase());
@@ -268,9 +283,9 @@ export default function TeacherStudents() {
       name: newColumnName.trim(),
       isSaved: false,
     };
-    setCustomColumnsByYear(prev => ({
+    setCustomColumnsBySemester(prev => ({
       ...prev,
-      [currentYear]: [...(prev[currentYear] || []), newCol],
+      [key]: [...(prev[key] || []), newCol],
     }));
     setNewColumnName('');
     toast({
@@ -279,17 +294,19 @@ export default function TeacherStudents() {
     });
   };
 
-  const handleRemoveColumn = (colId: string, year: number) => {
-    setCustomColumnsByYear(prev => ({
+  const handleRemoveColumn = (colId: string, year: number, semester: number) => {
+    const key = getSemesterKey(year, semester);
+    setCustomColumnsBySemester(prev => ({
       ...prev,
-      [year]: (prev[year] || []).filter(c => c.id !== colId),
+      [key]: (prev[key] || []).filter(c => c.id !== colId),
     }));
   };
 
-  const handleSaveColumn = (colId: string, year: number) => {
-    setCustomColumnsByYear(prev => ({
+  const handleSaveColumn = (colId: string, year: number, semester: number) => {
+    const key = getSemesterKey(year, semester);
+    setCustomColumnsBySemester(prev => ({
       ...prev,
-      [year]: (prev[year] || []).map(c => 
+      [key]: (prev[key] || []).map(c => 
         c.id === colId ? { ...c, isSaved: true } : c
       ),
     }));
@@ -299,35 +316,38 @@ export default function TeacherStudents() {
     });
   };
 
-  const toggleDeleteColumnMode = (year: number) => {
+  const toggleDeleteColumnMode = (year: number, semester: number) => {
+    const key = getSemesterKey(year, semester);
     setDeleteColumnMode(prev => ({
       ...prev,
-      [year]: !prev[year]
+      [key]: !prev[key]
     }));
     // Clear selections when exiting delete mode
-    if (deleteColumnMode[year]) {
+    if (deleteColumnMode[key]) {
       setSelectedColumnsToDelete(prev => ({
         ...prev,
-        [year]: new Set()
+        [key]: new Set()
       }));
     }
   };
 
-  const toggleColumnSelection = (year: number, columnName: string) => {
+  const toggleColumnSelection = (year: number, semester: number, columnName: string) => {
+    const key = getSemesterKey(year, semester);
     setSelectedColumnsToDelete(prev => {
-      const currentSet = new Set(prev[year]);
+      const currentSet = new Set(prev[key]);
       if (currentSet.has(columnName)) {
         currentSet.delete(columnName);
       } else {
         currentSet.add(columnName);
       }
-      return { ...prev, [year]: currentSet };
+      return { ...prev, [key]: currentSet };
     });
   };
 
-  const handleDeleteSelectedColumns = async (year: number, yearStudents: StudentRecord[]) => {
-    const columnsToDelete = selectedColumnsToDelete[year];
-    if (columnsToDelete.size === 0) {
+  const handleDeleteSelectedColumns = async (year: number, semester: number, semStudents: StudentRecord[]) => {
+    const key = getSemesterKey(year, semester);
+    const columnsToDelete = selectedColumnsToDelete[key];
+    if (!columnsToDelete || columnsToDelete.size === 0) {
       toast({
         title: 'No columns selected',
         description: 'Please select at least one column to delete.',
@@ -337,13 +357,13 @@ export default function TeacherStudents() {
     }
 
     // Remove from custom columns state (temporary columns)
-    setCustomColumnsByYear(prev => ({
+    setCustomColumnsBySemester(prev => ({
       ...prev,
-      [year]: (prev[year] || []).filter(c => !columnsToDelete.has(c.name))
+      [key]: (prev[key] || []).filter(c => !columnsToDelete.has(c.name))
     }));
 
     // Remove from student records (saved columns in database)
-    for (const student of yearStudents) {
+    for (const student of semStudents) {
       const customFields = student.custom_fields as Record<string, unknown> | null;
       if (customFields) {
         const updatedCustomFields = { ...customFields };
@@ -366,16 +386,16 @@ export default function TeacherStudents() {
     });
 
     // Reset delete mode and selections
-    setDeleteColumnMode(prev => ({ ...prev, [year]: false }));
-    setSelectedColumnsToDelete(prev => ({ ...prev, [year]: new Set() }));
+    setDeleteColumnMode(prev => ({ ...prev, [key]: false }));
+    setSelectedColumnsToDelete(prev => ({ ...prev, [key]: new Set() }));
   };
 
   // Get saved columns from existing student custom_fields (columns that have data)
-  const getSavedColumnsFromData = (yearStudents: StudentRecord[]) => {
+  const getSavedColumnsFromData = (semStudents: StudentRecord[]) => {
     const savedCols = new Set<string>();
     const monthKeys = MONTH_LABELS.map(m => m.toLowerCase() + '_attendance');
     
-    yearStudents.forEach(student => {
+    semStudents.forEach(student => {
       const customFields = student.custom_fields as Record<string, unknown> | null;
       if (customFields) {
         Object.keys(customFields).forEach(key => {
@@ -420,15 +440,16 @@ export default function TeacherStudents() {
     return count > 0 ? Math.round(total / count) : 0;
   };
 
-  const renderStudentTable = (yearStudents: StudentRecord[], year: number) => {
-    const monthlyColumnsWithData = getMonthlyColumnsWithData(yearStudents);
-    const isInDeleteMode = deleteColumnMode[year];
-    const selectedCols = selectedColumnsToDelete[year];
+  const renderStudentTable = (semStudents: StudentRecord[], year: number, semester: number) => {
+    const monthlyColumnsWithData = getMonthlyColumnsWithData(semStudents);
+    const key = getSemesterKey(year, semester);
+    const isInDeleteMode = deleteColumnMode[key];
+    const selectedCols = selectedColumnsToDelete[key] || new Set();
     
     // Get all deletable columns (custom columns - not base form fields)
     const getDeletableColumns = () => {
-      const sessionColNames = getCustomColumnsForYear(year).map(c => c.name);
-      const savedCols = getSavedColumnsFromData(yearStudents).filter(
+      const sessionColNames = getCustomColumnsForSlot(year, semester).map(c => c.name);
+      const savedCols = getSavedColumnsFromData(semStudents).filter(
         colName => !sessionColNames.map(s => s.toLowerCase()).includes(colName.toLowerCase())
       );
       const allDeletable = [...savedCols, ...sessionColNames];
@@ -442,13 +463,13 @@ export default function TeacherStudents() {
             <>
               <Button 
                 variant="destructive" 
-                onClick={() => handleDeleteSelectedColumns(year, yearStudents)}
+                onClick={() => handleDeleteSelectedColumns(year, semester, semStudents)}
                 disabled={selectedCols.size === 0}
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete Selected ({selectedCols.size})
               </Button>
-              <Button variant="outline" onClick={() => toggleDeleteColumnMode(year)}>
+              <Button variant="outline" onClick={() => toggleDeleteColumnMode(year, semester)}>
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>
@@ -456,7 +477,7 @@ export default function TeacherStudents() {
           ) : (
             <>
               {getDeletableColumns().length > 0 && (
-                <Button variant="outline" onClick={() => toggleDeleteColumnMode(year)}>
+                <Button variant="outline" onClick={() => toggleDeleteColumnMode(year, semester)}>
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete Column
                 </Button>
@@ -489,9 +510,9 @@ export default function TeacherStudents() {
             </>
           )}
         </div>
-        {yearStudents.length === 0 ? (
+        {semStudents.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <p className="mb-4">No students in this year. Add your first student.</p>
+            <p className="mb-4">No students in Sem {getGlobalSemester(year, semester)}. Add your first student.</p>
             <Button onClick={handleAdd}>
               <Plus className="w-4 h-4 mr-2" />
               Add Student
@@ -514,8 +535,8 @@ export default function TeacherStudents() {
                   ))}
                   {/* Saved columns from database - exclude any that exist in current session columns to prevent duplicates */}
                   {(() => {
-                    const sessionColNames = getCustomColumnsForYear(year).map(c => c.name.toLowerCase());
-                    return getSavedColumnsFromData(yearStudents)
+                    const sessionColNames = getCustomColumnsForSlot(year, semester).map(c => c.name.toLowerCase());
+                    return getSavedColumnsFromData(semStudents)
                       .filter(colName => !sessionColNames.includes(colName.toLowerCase()))
                       .map(colName => (
                         <TableHead key={colName} className="font-semibold">
@@ -523,7 +544,7 @@ export default function TeacherStudents() {
                             {isInDeleteMode && (
                               <Checkbox
                                 checked={selectedCols.has(colName)}
-                                onCheckedChange={() => toggleColumnSelection(year, colName)}
+                                onCheckedChange={() => toggleColumnSelection(year, semester, colName)}
                               />
                             )}
                             {colName}
@@ -531,14 +552,14 @@ export default function TeacherStudents() {
                         </TableHead>
                       ));
                   })()}
-                  {/* Temporary custom columns for this year */}
-                  {getCustomColumnsForYear(year).filter(col => !col.isSaved).map(col => (
+                  {/* Temporary custom columns for this semester */}
+                  {getCustomColumnsForSlot(year, semester).filter(col => !col.isSaved).map(col => (
                     <TableHead key={col.id} className="font-semibold">
                       <div className="flex items-center gap-2">
                         {isInDeleteMode && (
                           <Checkbox
                             checked={selectedCols.has(col.name)}
-                            onCheckedChange={() => toggleColumnSelection(year, col.name)}
+                            onCheckedChange={() => toggleColumnSelection(year, semester, col.name)}
                           />
                         )}
                         {col.name}
@@ -548,7 +569,7 @@ export default function TeacherStudents() {
                               variant="ghost"
                               size="icon"
                               className="h-5 w-5 text-success hover:text-success hover:bg-success/10"
-                              onClick={() => handleSaveColumn(col.id, year)}
+                              onClick={() => handleSaveColumn(col.id, year, semester)}
                               title="Save column permanently"
                             >
                               <Check className="w-3 h-3" />
@@ -557,7 +578,7 @@ export default function TeacherStudents() {
                               variant="ghost"
                               size="icon"
                               className="h-5 w-5 text-destructive hover:text-destructive"
-                              onClick={() => handleRemoveColumn(col.id, year)}
+                              onClick={() => handleRemoveColumn(col.id, year, semester)}
                               title="Remove column"
                             >
                               <X className="w-3 h-3" />
@@ -567,14 +588,14 @@ export default function TeacherStudents() {
                       </div>
                     </TableHead>
                   ))}
-                  {/* Saved custom columns from this session for this year */}
-                  {getCustomColumnsForYear(year).filter(col => col.isSaved).map(col => (
+                  {/* Saved custom columns from this session for this semester */}
+                  {getCustomColumnsForSlot(year, semester).filter(col => col.isSaved).map(col => (
                     <TableHead key={col.id} className="font-semibold">
                       <div className="flex items-center gap-2">
                         {isInDeleteMode && (
                           <Checkbox
                             checked={selectedCols.has(col.name)}
-                            onCheckedChange={() => toggleColumnSelection(year, col.name)}
+                            onCheckedChange={() => toggleColumnSelection(year, semester, col.name)}
                           />
                         )}
                         {col.name}
@@ -585,7 +606,7 @@ export default function TeacherStudents() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {yearStudents.map((student) => {
+                {semStudents.map((student) => {
                   const customFields = student.custom_fields as Record<string, unknown> | null;
                   const avgAttendance = calculateAvgAttendance(customFields);
                   return (
@@ -610,8 +631,8 @@ export default function TeacherStudents() {
                         </div>
                       </TableCell>
                       {monthlyColumnsWithData.map(month => {
-                        const key = month.toLowerCase() + '_attendance';
-                        const value = customFields?.[key];
+                        const mKey = month.toLowerCase() + '_attendance';
+                        const value = customFields?.[mKey];
                         const numValue = typeof value === 'number' ? value : (value ? parseFloat(String(value)) : 0);
                         return (
                           <TableCell key={month}>
@@ -633,8 +654,8 @@ export default function TeacherStudents() {
                       })}
                       {/* Saved columns from database - exclude session columns to prevent duplicates */}
                       {(() => {
-                        const sessionColNames = getCustomColumnsForYear(year).map(c => c.name.toLowerCase());
-                        return getSavedColumnsFromData(yearStudents)
+                        const sessionColNames = getCustomColumnsForSlot(year, semester).map(c => c.name.toLowerCase());
+                        return getSavedColumnsFromData(semStudents)
                           .filter(colName => !sessionColNames.includes(colName.toLowerCase()))
                           .map(colName => (
                             <TableCell key={colName}>
@@ -646,8 +667,8 @@ export default function TeacherStudents() {
                             </TableCell>
                           ));
                       })()}
-                      {/* All custom columns for this year (both temporary and saved from this session) */}
-                      {getCustomColumnsForYear(year).map(col => (
+                      {/* All custom columns for this semester (both temporary and saved from this session) */}
+                      {getCustomColumnsForSlot(year, semester).map(col => (
                         <TableCell key={col.id}>
                           <Input
                             className="h-8 w-24"
@@ -689,7 +710,7 @@ export default function TeacherStudents() {
   }
 
   return (
-    <DashboardLayout title="Student Management" subtitle="Manage student records by year">
+    <DashboardLayout title="Student Management" subtitle="Manage student records by semester">
       <div className="mb-6 flex items-center gap-3 flex-wrap">
         <Button onClick={handleAdd}>
           <Plus className="w-4 h-4 mr-2" />
@@ -698,20 +719,39 @@ export default function TeacherStudents() {
       </div>
 
       <Card className="p-6">
-        <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <Tabs value={selectedTab} onValueChange={(v) => { setSelectedTab(v); setSelectedSemester('1'); }}>
           <TabsList className="mb-6">
             {YEAR_LABELS.map((label, idx) => (
               <TabsTrigger key={idx + 1} value={String(idx + 1)}>
-                {label} ({getStudentsByYear(idx + 1).length})
+                {label}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          {YEAR_LABELS.map((_, idx) => (
-            <TabsContent key={idx + 1} value={String(idx + 1)}>
-              {renderStudentTable(getStudentsByYear(idx + 1), idx + 1)}
-            </TabsContent>
-          ))}
+          {YEAR_LABELS.map((_, idx) => {
+            const year = idx + 1;
+            return (
+              <TabsContent key={year} value={String(year)}>
+                <Tabs value={selectedSemester} onValueChange={setSelectedSemester}>
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="1">
+                      Sem {getGlobalSemester(year, 1)} ({getStudentsBySemester(year, 1).length})
+                    </TabsTrigger>
+                    <TabsTrigger value="2">
+                      Sem {getGlobalSemester(year, 2)} ({getStudentsBySemester(year, 2).length})
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="1">
+                    {renderStudentTable(getStudentsBySemester(year, 1), year, 1)}
+                  </TabsContent>
+                  <TabsContent value="2">
+                    {renderStudentTable(getStudentsBySemester(year, 2), year, 2)}
+                  </TabsContent>
+                </Tabs>
+              </TabsContent>
+            );
+          })}
         </Tabs>
       </Card>
 
@@ -756,6 +796,25 @@ export default function TeacherStudents() {
               </div>
             </div>
             <div>
+              <Label htmlFor="semester">Semester</Label>
+              <Select
+                value={String(formData.semester || 1)}
+                onValueChange={(v) => setFormData({ ...formData, semester: parseInt(v) })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background border shadow-lg z-50">
+                  <SelectItem value="1">
+                    Sem {getGlobalSemester(formData.year || 1, 1)}
+                  </SelectItem>
+                  <SelectItem value="2">
+                    Sem {getGlobalSemester(formData.year || 1, 2)}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label htmlFor="name">Full Name</Label>
               <Input
                 id="name"
@@ -787,22 +846,22 @@ export default function TeacherStudents() {
             <div className="space-y-3">
               <Label className="text-sm font-medium">Monthly Attendance (Optional)</Label>
               <div className="grid grid-cols-3 gap-3 max-h-48 overflow-y-auto p-2 border rounded-md bg-muted/30">
-                {MONTH_LABELS.map((month, idx) => {
-                  const key = month.toLowerCase().replace(' ', '_') + '_attendance';
+                {MONTH_LABELS.map((month) => {
+                  const mKey = month.toLowerCase().replace(' ', '_') + '_attendance';
                   return (
                     <div key={month} className="space-y-1">
-                      <Label htmlFor={key} className="text-xs text-muted-foreground">{month}</Label>
+                      <Label htmlFor={mKey} className="text-xs text-muted-foreground">{month}</Label>
                       <Input
-                        id={key}
+                        id={mKey}
                         type="number"
                         min={0}
                         max={100}
                         placeholder="%"
                         className="h-8"
-                        value={monthlyAttendance[key] || ''}
+                        value={monthlyAttendance[mKey] || ''}
                         onChange={(e) => setMonthlyAttendance(prev => ({
                           ...prev,
-                          [key]: e.target.value
+                          [mKey]: e.target.value
                         }))}
                       />
                     </div>
@@ -816,16 +875,18 @@ export default function TeacherStudents() {
             
             {/* Custom Fields Section - show ALL columns present in table */}
             {(() => {
-              const allStudents = getStudentsByYear(formData.year || 1);
+              const yr = formData.year || 1;
+              const sem = formData.semester || 1;
+              const allStudents = getStudentsBySemester(yr, sem);
               const savedCols = getSavedColumnsFromData(allStudents);
-              // Add columns from current session for this year (both saved and unsaved)
-              const sessionCols = getCustomColumnsForYear(formData.year || 1).map(c => c.name);
+              // Add columns from current session for this semester (both saved and unsaved)
+              const sessionCols = getCustomColumnsForSlot(yr, sem).map(c => c.name);
               // Also include any custom fields that exist on the current student being edited
               const studentCustomFields = editingStudent?.custom_fields as Record<string, unknown> | null;
-              const studentCols = studentCustomFields ? Object.keys(studentCustomFields).filter(key => {
+              const studentCols = studentCustomFields ? Object.keys(studentCustomFields).filter(fKey => {
                 // Exclude monthly attendance keys
                 const monthKeys = MONTH_LABELS.map(m => m.toLowerCase() + '_attendance');
-                return !monthKeys.includes(key);
+                return !monthKeys.includes(fKey);
               }) : [];
               
               const allCols = [...new Set([...savedCols, ...sessionCols, ...studentCols])];
@@ -890,7 +951,7 @@ export default function TeacherStudents() {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 Upload an Excel file (.xlsx, .xls) containing student data. 
-                Students will be matched by <strong>Student ID</strong> or <strong>Name</strong> to update existing records.
+                Students will be imported to <strong>Sem {getGlobalSemester(parseInt(selectedTab), parseInt(selectedSemester))}</strong>.
               </p>
               
               <Alert>
@@ -938,7 +999,7 @@ export default function TeacherStudents() {
                     <CheckCircle className="h-4 w-4" />
                     <AlertDescription>
                       Found <strong>{importState.result.validRows}</strong> valid student records 
-                      out of {importState.result.totalRows} rows.
+                      out of {importState.result.totalRows} rows. Importing to <strong>Sem {getGlobalSemester(parseInt(selectedTab), parseInt(selectedSemester))}</strong>.
                     </AlertDescription>
                   </Alert>
 
@@ -967,7 +1028,9 @@ export default function TeacherStudents() {
                           <span className="font-medium">
                             {student.student_id ? `[${student.student_id}] ` : ''}{student.name}
                           </span>
-                          <span className="text-muted-foreground text-xs">Year {student.year || 1}</span>
+                          <span className="text-muted-foreground text-xs">
+                            Sem {getGlobalSemester(parseInt(selectedTab), parseInt(selectedSemester))}
+                          </span>
                         </div>
                       ))}
                     </div>

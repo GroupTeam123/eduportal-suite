@@ -58,45 +58,52 @@ const computeMonthlyAttendance = (students: Array<{ custom_fields?: Record<strin
   return result;
 };
 
+const getGlobalSemester = (year: number, sem: number) => (year - 1) * 2 + sem;
+
 export default function TeacherDashboard() {
   const { user, departmentId, supabaseUser } = useAuth();
   const { students, loading: studentsLoading } = useStudents(departmentId);
   const { reports, loading: reportsLoading } = useReports(supabaseUser?.id || null, user?.role || null, departmentId);
   
-  // Get students by year
-  const studentsByYear = useMemo(() => {
-    return {
-      1: students.filter(s => s.year === 1),
-      2: students.filter(s => s.year === 2),
-      3: students.filter(s => s.year === 3),
-      4: students.filter(s => s.year === 4),
-    };
+  // Get students by year and semester
+  const studentsBySemester = useMemo(() => {
+    const result: Record<string, typeof students> = {};
+    for (let year = 1; year <= 4; year++) {
+      for (let sem = 1; sem <= 2; sem++) {
+        result[`${year}-${sem}`] = students.filter(
+          s => (s.year || 1) === year && ((s as any).semester || 1) === sem
+        );
+      }
+    }
+    return result;
   }, [students]);
   
-  // Total students count (sum of all years)
+  // Total students count (sum of all)
   const totalStudents = students.length;
   
   // Year-wise average attendance
   const yearWiseAttendance = useMemo(() => {
     return [1, 2, 3, 4].map(year => {
-      const yearStudents = studentsByYear[year as keyof typeof studentsByYear];
+      const yearStudents = students.filter(s => (s.year || 1) === year);
       if (yearStudents.length === 0) return { year, avg: 0 };
       const avg = Math.round(
         yearStudents.reduce((acc, s) => acc + (s.attendance || 0), 0) / yearStudents.length
       );
       return { year, avg };
     });
-  }, [studentsByYear]);
+  }, [students]);
   
-  // Monthly attendance data for each year
-  const monthlyAttendanceByYear = useMemo(() => {
-    return {
-      1: computeMonthlyAttendance(studentsByYear[1]),
-      2: computeMonthlyAttendance(studentsByYear[2]),
-      3: computeMonthlyAttendance(studentsByYear[3]),
-      4: computeMonthlyAttendance(studentsByYear[4]),
-    };
-  }, [studentsByYear]);
+  // Monthly attendance data for each semester
+  const monthlyAttendanceBySemester = useMemo(() => {
+    const result: Record<string, Array<{ name: string; value: number }>> = {};
+    for (let year = 1; year <= 4; year++) {
+      for (let sem = 1; sem <= 2; sem++) {
+        const key = `${year}-${sem}`;
+        result[key] = computeMonthlyAttendance(studentsBySemester[key] || []);
+      }
+    }
+    return result;
+  }, [studentsBySemester]);
   
   // Reports count
   const reportsCount = reports.length;
@@ -107,6 +114,12 @@ export default function TeacherDashboard() {
     'hsl(199, 89%, 48%)',
     'hsl(142, 76%, 36%)',
     'hsl(38, 92%, 50%)'
+  ];
+  const semChartColors = [
+    ['hsl(var(--primary))', 'hsl(262, 83%, 58%)'],
+    ['hsl(199, 89%, 48%)', 'hsl(199, 89%, 35%)'],
+    ['hsl(142, 76%, 36%)', 'hsl(142, 76%, 50%)'],
+    ['hsl(38, 92%, 50%)', 'hsl(25, 95%, 53%)'],
   ];
   
   return (
@@ -141,37 +154,51 @@ export default function TeacherDashboard() {
         />
       </div>
 
-      {/* Monthly Attendance Charts - 2x2 Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      {/* Monthly Attendance Charts - Semester-wise (2 per year) */}
+      <div className="space-y-8 mb-8">
         {[1, 2, 3, 4].map((year, idx) => (
-          <div key={year} className="bg-card rounded-xl shadow-card p-6">
+          <div key={year}>
             <h3 className="font-display text-lg font-semibold mb-4">
               {yearLabels[idx]} Year Monthly Attendance Trend
             </h3>
-            {monthlyAttendanceByYear[year as keyof typeof monthlyAttendanceByYear].length > 0 ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={monthlyAttendanceByYear[year as keyof typeof monthlyAttendanceByYear]}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} domain={[0, 100]} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }} 
-                  />
-                  <Bar dataKey="value" fill={chartColors[idx]} radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground">
-                <p className="text-center">
-                  No monthly attendance data available.<br />
-                  <span className="text-sm">Add monthly attendance (January, February, etc.) in the Students table.</span>
-                </p>
-              </div>
-            )}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {[1, 2].map(sem => {
+                const semKey = `${year}-${sem}`;
+                const semData = monthlyAttendanceBySemester[semKey] || [];
+                const globalSem = getGlobalSemester(year, sem);
+                return (
+                  <div key={sem} className="bg-card rounded-xl shadow-card p-6">
+                    <h4 className="font-display text-base font-medium mb-4 text-muted-foreground">
+                      Semester {globalSem}
+                    </h4>
+                    {semData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={semData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                          <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} domain={[0, 100]} />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: 'hsl(var(--card))', 
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }} 
+                          />
+                          <Bar dataKey="value" fill={semChartColors[idx][sem - 1]} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                        <p className="text-center">
+                          No monthly attendance data available.<br />
+                          <span className="text-sm">Add monthly attendance in the Students table for Sem {globalSem}.</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ))}
       </div>
