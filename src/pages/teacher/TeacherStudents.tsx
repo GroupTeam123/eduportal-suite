@@ -823,29 +823,31 @@ export default function TeacherStudents() {
                 required
               />
             </div>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email || ''}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="contact">Contact Number</Label>
-              <Input
-                id="contact"
-                type="number"
-                value={formData.contact || ''}
-                onChange={(e) => setFormData({ ...formData, contact: e.target.value ? parseInt(e.target.value) : undefined })}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email || ''}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="contact">Contact Number</Label>
+                <Input
+                  id="contact"
+                  type="number"
+                  value={formData.contact || ''}
+                  onChange={(e) => setFormData({ ...formData, contact: e.target.value ? parseInt(e.target.value) : undefined })}
+                />
+              </div>
             </div>
             
-            {/* Monthly Attendance Section */}
+            {/* Monthly Attendance Section - All 12 months */}
             <div className="space-y-3">
               <Label className="text-sm font-medium">Monthly Attendance (Optional)</Label>
-              <div className="grid grid-cols-3 gap-3 max-h-48 overflow-y-auto p-2 border rounded-md bg-muted/30">
+              <div className="grid grid-cols-3 gap-3 p-2 border rounded-md bg-muted/30">
                 {MONTH_LABELS.map((month) => {
                   const mKey = month.toLowerCase().replace(' ', '_') + '_attendance';
                   return (
