@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useStudents, StudentRecord, NewStudentRecord } from '@/hooks/useStudents';
+import { useCourses } from '@/hooks/useCourses';
+import { CoursesSection } from '@/components/teacher/CoursesSection';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,6 +55,8 @@ const initSemesterRecord = <T,>(defaultValue: () => T): Record<string, T> => {
 export default function TeacherStudents() {
   const { user, supabaseUser, departmentId } = useAuth();
   const { students, loading, addStudent, updateStudent, deleteStudent, importStudents } = useStudents(departmentId);
+  const { courses, loading: coursesLoading, addCourse, updateCourse, deleteCourse, addStudentToCourse, removeStudentFromCourse, getStudentsForCourse } = useCourses(departmentId);
+  const [mainTab, setMainTab] = useState<string>('semesters');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
@@ -710,50 +714,73 @@ export default function TeacherStudents() {
   }
 
   return (
-    <DashboardLayout title="Student Management" subtitle="Manage student records by semester">
-      <div className="mb-6 flex items-center gap-3 flex-wrap">
-        <Button onClick={handleAdd}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Student
-        </Button>
-      </div>
+    <DashboardLayout title="Student Management" subtitle="Manage student records by semester and courses">
+      <Tabs value={mainTab} onValueChange={setMainTab} className="mb-6">
+        <TabsList className="mb-4">
+          <TabsTrigger value="semesters">Semesters</TabsTrigger>
+          <TabsTrigger value="courses">Courses</TabsTrigger>
+        </TabsList>
 
-      <Card className="p-6">
-        <Tabs value={selectedTab} onValueChange={(v) => { setSelectedTab(v); setSelectedSemester('1'); }}>
-          <TabsList className="mb-6">
-            {YEAR_LABELS.map((label, idx) => (
-              <TabsTrigger key={idx + 1} value={String(idx + 1)}>
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+        <TabsContent value="semesters">
+          <div className="mb-6 flex items-center gap-3 flex-wrap">
+            <Button onClick={handleAdd}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Student
+            </Button>
+          </div>
 
-          {YEAR_LABELS.map((_, idx) => {
-            const year = idx + 1;
-            return (
-              <TabsContent key={year} value={String(year)}>
-                <Tabs value={selectedSemester} onValueChange={setSelectedSemester}>
-                  <TabsList className="mb-4">
-                    <TabsTrigger value="1">
-                      Sem {getGlobalSemester(year, 1)} ({getStudentsBySemester(year, 1).length})
-                    </TabsTrigger>
-                    <TabsTrigger value="2">
-                      Sem {getGlobalSemester(year, 2)} ({getStudentsBySemester(year, 2).length})
-                    </TabsTrigger>
-                  </TabsList>
+          <Card className="p-6">
+            <Tabs value={selectedTab} onValueChange={(v) => { setSelectedTab(v); setSelectedSemester('1'); }}>
+              <TabsList className="mb-6">
+                {YEAR_LABELS.map((label, idx) => (
+                  <TabsTrigger key={idx + 1} value={String(idx + 1)}>
+                    {label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
 
-                  <TabsContent value="1">
-                    {renderStudentTable(getStudentsBySemester(year, 1), year, 1)}
+              {YEAR_LABELS.map((_, idx) => {
+                const year = idx + 1;
+                return (
+                  <TabsContent key={year} value={String(year)}>
+                    <Tabs value={selectedSemester} onValueChange={setSelectedSemester}>
+                      <TabsList className="mb-4">
+                        <TabsTrigger value="1">
+                          Sem {getGlobalSemester(year, 1)} ({getStudentsBySemester(year, 1).length})
+                        </TabsTrigger>
+                        <TabsTrigger value="2">
+                          Sem {getGlobalSemester(year, 2)} ({getStudentsBySemester(year, 2).length})
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="1">
+                        {renderStudentTable(getStudentsBySemester(year, 1), year, 1)}
+                      </TabsContent>
+                      <TabsContent value="2">
+                        {renderStudentTable(getStudentsBySemester(year, 2), year, 2)}
+                      </TabsContent>
+                    </Tabs>
                   </TabsContent>
-                  <TabsContent value="2">
-                    {renderStudentTable(getStudentsBySemester(year, 2), year, 2)}
-                  </TabsContent>
-                </Tabs>
-              </TabsContent>
-            );
-          })}
-        </Tabs>
-      </Card>
+                );
+              })}
+            </Tabs>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="courses">
+          <CoursesSection
+            courses={courses}
+            allStudents={students}
+            getStudentsForCourse={getStudentsForCourse}
+            onAddCourse={async (name, desc) => supabaseUser ? addCourse(name, desc, supabaseUser.id) : null}
+            onUpdateCourse={updateCourse}
+            onDeleteCourse={deleteCourse}
+            onAddStudentToCourse={addStudentToCourse}
+            onRemoveStudentFromCourse={removeStudentFromCourse}
+            onUpdateStudent={updateStudent}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Add/Edit Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
