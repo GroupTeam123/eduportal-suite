@@ -761,8 +761,8 @@ export default function TeacherStudents() {
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>{editingStudent ? 'Edit Student' : 'Add New Student'}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-            <ScrollArea className="flex-1 pr-4">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto pr-4">
               <div className="space-y-4 pb-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -923,7 +923,7 @@ export default function TeacherStudents() {
               );
             })()}
               </div>
-            </ScrollArea>
+            </div>
             <div className="flex justify-end gap-3 pt-4 border-t mt-4 flex-shrink-0">
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancel
