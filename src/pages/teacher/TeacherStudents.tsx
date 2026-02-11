@@ -64,6 +64,8 @@ export default function TeacherStudents() {
     const tab = searchParams.get('tab');
     if (tab === 'courses') {
       setMainTab('courses');
+    } else {
+      setMainTab('semesters');
     }
   }, [searchParams]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
