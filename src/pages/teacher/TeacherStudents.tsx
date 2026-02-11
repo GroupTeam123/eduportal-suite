@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useStudents, StudentRecord, NewStudentRecord } from '@/hooks/useStudents';
 import { useCourses } from '@/hooks/useCourses';
@@ -56,7 +57,15 @@ export default function TeacherStudents() {
   const { user, supabaseUser, departmentId } = useAuth();
   const { students, loading, addStudent, updateStudent, deleteStudent, importStudents } = useStudents(departmentId);
   const { courses, loading: coursesLoading, addCourse, updateCourse, deleteCourse, addStudentToCourse, removeStudentFromCourse, getStudentsForCourse } = useCourses(departmentId);
-  const [mainTab, setMainTab] = useState<string>('semesters');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [mainTab, setMainTab] = useState<string>(searchParams.get('tab') === 'courses' ? 'courses' : 'semesters');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'courses') {
+      setMainTab('courses');
+    }
+  }, [searchParams]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);

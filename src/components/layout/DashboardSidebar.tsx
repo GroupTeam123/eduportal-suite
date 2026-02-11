@@ -12,6 +12,7 @@ import {
   Building2,
   FolderOpen,
   Send,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,6 +28,7 @@ interface NavItem {
 const teacherNav: NavItem[] = [
   { label: 'Dashboard', icon: BarChart3, path: '/teacher' },
   { label: 'Students', icon: Users, path: '/teacher/students' },
+  { label: 'Courses', icon: BookOpen, path: '/teacher/students?tab=courses' },
   { label: 'Reports', icon: FileText, path: '/teacher/reports' },
   { label: 'Submit Report', icon: Send, path: '/teacher/submit' },
   { label: 'About Me', icon: User, path: '/teacher/profile' },
@@ -148,10 +150,15 @@ export function DashboardSidebar() {
         {navItems.map((item) => (
           <button
             key={item.path}
-            onClick={() => navigate(item.path)}
+            onClick={() => {
+              const [path, query] = item.path.split('?');
+              navigate(query ? `${path}?${query}` : path);
+            }}
             className={cn(
               'nav-link w-full',
-              location.pathname === item.path && 'active'
+              (item.path.includes('?')
+                ? location.pathname + location.search === item.path
+                : location.pathname === item.path && !location.search) && 'active'
             )}
           >
             <item.icon className="w-5 h-5" />
