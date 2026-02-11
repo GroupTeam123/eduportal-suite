@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, BookOpen, Users, X, Check, Columns, UserPlus, UserMinus } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Users, X, Check, Columns, UserPlus, UserMinus, Eye, EyeOff } from 'lucide-react';
 import { Course } from '@/hooks/useCourses';
 import { StudentRecord } from '@/hooks/useStudents';
 import { useToast } from '@/hooks/use-toast';
@@ -69,6 +69,11 @@ export function CoursesSection({
   const [newColumnName, setNewColumnName] = useState('');
   const [deleteColumnMode, setDeleteColumnMode] = useState<Record<string, boolean>>({});
   const [selectedColumnsToDelete, setSelectedColumnsToDelete] = useState<Record<string, Set<string>>>({});
+  // Hidden base columns per course
+  const [hiddenBaseColumns, setHiddenBaseColumns] = useState<Record<string, Set<string>>>({});
+
+  const BASE_COLUMNS = ['Student ID', 'Name', 'Email', 'Contact', 'Attendance'];
+  const isBaseColumnVisible = (courseId: string, col: string) => !(hiddenBaseColumns[courseId]?.has(col));
 
   const handleOpenAddCourse = () => {
     setEditingCourse(null);
@@ -150,8 +155,9 @@ export function CoursesSection({
   };
 
   const toggleDeleteColumnMode = (courseId: string) => {
-    setDeleteColumnMode(prev => ({ ...prev, [courseId]: !prev[courseId] }));
-    if (deleteColumnMode[courseId]) {
+    const newMode = !deleteColumnMode[courseId];
+    setDeleteColumnMode(prev => ({ ...prev, [courseId]: newMode }));
+    if (!newMode) {
       setSelectedColumnsToDelete(prev => ({ ...prev, [courseId]: new Set() }));
     }
   };
@@ -171,24 +177,61 @@ export function CoursesSection({
       toast({ title: 'No columns selected', variant: 'destructive' });
       return;
     }
-    setCustomColumnsByCourse(prev => ({
-      ...prev,
-      [courseId]: (prev[courseId] || []).filter(c => !columnsToDelete.has(c.name))
-    }));
-    for (const student of courseStudentRecords) {
-      const customFields = student.custom_fields as Record<string, unknown> | null;
-      if (customFields) {
-        const updated = { ...customFields };
-        let changed = false;
-        columnsToDelete.forEach(colName => {
-          if (colName in updated) { delete updated[colName]; changed = true; }
-        });
-        if (changed) await onUpdateStudent(student.id, { custom_fields: updated });
+
+    // Separate base columns from custom columns
+    const baseColsToHide = new Set<string>();
+    const customColsToDelete = new Set<string>();
+    const monthlyColsToHide = new Set<string>();
+
+    columnsToDelete.forEach(colName => {
+      if (BASE_COLUMNS.includes(colName)) {
+        baseColsToHide.add(colName);
+      } else if (colName.endsWith(' Att.')) {
+        // Monthly attendance column
+        monthlyColsToHide.add(colName);
+      } else {
+        customColsToDelete.add(colName);
+      }
+    });
+
+    // Hide base columns (just visibility toggle, no data deletion)
+    if (baseColsToHide.size > 0 || monthlyColsToHide.size > 0) {
+      setHiddenBaseColumns(prev => {
+        const current = new Set(prev[courseId] || []);
+        baseColsToHide.forEach(col => current.add(col));
+        monthlyColsToHide.forEach(col => current.add(col));
+        return { ...prev, [courseId]: current };
+      });
+    }
+
+    // Delete custom columns from state and data
+    if (customColsToDelete.size > 0) {
+      setCustomColumnsByCourse(prev => ({
+        ...prev,
+        [courseId]: (prev[courseId] || []).filter(c => !customColsToDelete.has(c.name))
+      }));
+      for (const student of courseStudentRecords) {
+        const customFields = student.custom_fields as Record<string, unknown> | null;
+        if (customFields) {
+          const updated = { ...customFields };
+          let changed = false;
+          customColsToDelete.forEach(colName => {
+            if (colName in updated) { delete updated[colName]; changed = true; }
+          });
+          if (changed) await onUpdateStudent(student.id, { custom_fields: updated });
+        }
       }
     }
-    toast({ title: 'Columns Deleted', description: `${columnsToDelete.size} column(s) deleted.` });
+
+    const totalRemoved = columnsToDelete.size;
+    toast({ title: 'Columns Removed', description: `${totalRemoved} column(s) removed from view.` });
     setDeleteColumnMode(prev => ({ ...prev, [courseId]: false }));
     setSelectedColumnsToDelete(prev => ({ ...prev, [courseId]: new Set() }));
+  };
+
+  const handleRestoreColumns = (courseId: string) => {
+    setHiddenBaseColumns(prev => ({ ...prev, [courseId]: new Set() }));
+    toast({ title: 'Columns Restored', description: 'All hidden columns have been restored.' });
   };
 
   const handleUpdateCustomField = async (studentId: string, columnName: string, value: string) => {
@@ -246,13 +289,21 @@ export function CoursesSection({
     const monthlyColumnsWithData = getMonthlyColumnsWithData(courseStudentRecords);
     const isInDeleteMode = deleteColumnMode[courseId] || false;
     const selectedCols = selectedColumnsToDelete[courseId] || new Set();
+    const visibleMonthlyColumns = monthlyColumnsWithData.filter(m => !hiddenBaseColumns[courseId]?.has(m + ' Att.'));
+    const hasHiddenColumns = (hiddenBaseColumns[courseId]?.size || 0) > 0;
 
     const getDeletableColumns = () => {
+      // Include visible base columns (except Name which should always stay)
+      const visibleBase = BASE_COLUMNS.filter(c => c !== 'Name' && isBaseColumnVisible(courseId, c));
+      // Include visible monthly columns
+      const visibleMonthly = monthlyColumnsWithData
+        .filter(m => !hiddenBaseColumns[courseId]?.has(m + ' Att.'))
+        .map(m => m + ' Att.');
       const sessionColNames = getCustomColumnsForCourse(courseId).map(c => c.name);
       const savedCols = getSavedColumnsFromData(courseStudentRecords).filter(
         colName => !sessionColNames.map(s => s.toLowerCase()).includes(colName.toLowerCase())
       );
-      return [...savedCols, ...sessionColNames];
+      return [...visibleBase, ...visibleMonthly, ...savedCols, ...sessionColNames];
     };
 
     return (
@@ -274,9 +325,12 @@ export function CoursesSection({
               </>
             ) : (
               <>
-                {getDeletableColumns().length > 0 && (
-                  <Button variant="outline" onClick={() => toggleDeleteColumnMode(courseId)}>
-                    <Trash2 className="w-4 h-4 mr-2" />Delete Column
+                <Button variant="outline" onClick={() => toggleDeleteColumnMode(courseId)}>
+                  <Trash2 className="w-4 h-4 mr-2" />Delete Column
+                </Button>
+                {hasHiddenColumns && (
+                  <Button variant="outline" onClick={() => handleRestoreColumns(courseId)}>
+                    <Eye className="w-4 h-4 mr-2" />Restore Columns
                   </Button>
                 )}
                 <Popover>
@@ -312,13 +366,46 @@ export function CoursesSection({
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/50">
-                  <TableHead className="font-semibold">Student ID</TableHead>
+                  {isBaseColumnVisible(courseId, 'Student ID') && (
+                    <TableHead className="font-semibold">
+                      <div className="flex items-center gap-2">
+                        {isInDeleteMode && <Checkbox checked={selectedCols.has('Student ID')} onCheckedChange={() => toggleColumnSelection(courseId, 'Student ID')} />}
+                        Student ID
+                      </div>
+                    </TableHead>
+                  )}
                   <TableHead className="font-semibold">Name</TableHead>
-                  <TableHead className="font-semibold">Email</TableHead>
-                  <TableHead className="font-semibold">Contact</TableHead>
-                  <TableHead className="font-semibold">Attendance</TableHead>
-                  {monthlyColumnsWithData.map(month => (
-                    <TableHead key={month} className="font-semibold">{month} Att.</TableHead>
+                  {isBaseColumnVisible(courseId, 'Email') && (
+                    <TableHead className="font-semibold">
+                      <div className="flex items-center gap-2">
+                        {isInDeleteMode && <Checkbox checked={selectedCols.has('Email')} onCheckedChange={() => toggleColumnSelection(courseId, 'Email')} />}
+                        Email
+                      </div>
+                    </TableHead>
+                  )}
+                  {isBaseColumnVisible(courseId, 'Contact') && (
+                    <TableHead className="font-semibold">
+                      <div className="flex items-center gap-2">
+                        {isInDeleteMode && <Checkbox checked={selectedCols.has('Contact')} onCheckedChange={() => toggleColumnSelection(courseId, 'Contact')} />}
+                        Contact
+                      </div>
+                    </TableHead>
+                  )}
+                  {isBaseColumnVisible(courseId, 'Attendance') && (
+                    <TableHead className="font-semibold">
+                      <div className="flex items-center gap-2">
+                        {isInDeleteMode && <Checkbox checked={selectedCols.has('Attendance')} onCheckedChange={() => toggleColumnSelection(courseId, 'Attendance')} />}
+                        Attendance
+                      </div>
+                    </TableHead>
+                  )}
+                  {visibleMonthlyColumns.map(month => (
+                    <TableHead key={month} className="font-semibold">
+                      <div className="flex items-center gap-2">
+                        {isInDeleteMode && <Checkbox checked={selectedCols.has(month + ' Att.')} onCheckedChange={() => toggleColumnSelection(courseId, month + ' Att.')} />}
+                        {month} Att.
+                      </div>
+                    </TableHead>
                   ))}
                   {(() => {
                     const sessionColNames = getCustomColumnsForCourse(courseId).map(c => c.name.toLowerCase());
@@ -368,19 +455,27 @@ export function CoursesSection({
                   const avgAttendance = calculateAvgAttendance(customFields);
                   return (
                     <TableRow key={student.id} className="hover:bg-muted/30">
-                      <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
+                      {isBaseColumnVisible(courseId, 'Student ID') && (
+                        <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
+                      )}
                       <TableCell>{student.name}</TableCell>
-                      <TableCell>{student.email || '-'}</TableCell>
-                      <TableCell>{student.contact || '-'}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${avgAttendance >= 90 ? 'bg-success' : avgAttendance >= 75 ? 'bg-warning' : 'bg-destructive'}`} style={{ width: `${Math.min(100, avgAttendance)}%` }} />
+                      {isBaseColumnVisible(courseId, 'Email') && (
+                        <TableCell>{student.email || '-'}</TableCell>
+                      )}
+                      {isBaseColumnVisible(courseId, 'Contact') && (
+                        <TableCell>{student.contact || '-'}</TableCell>
+                      )}
+                      {isBaseColumnVisible(courseId, 'Attendance') && (
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${avgAttendance >= 90 ? 'bg-success' : avgAttendance >= 75 ? 'bg-warning' : 'bg-destructive'}`} style={{ width: `${Math.min(100, avgAttendance)}%` }} />
+                            </div>
+                            <span className="text-sm font-medium">{avgAttendance}%</span>
                           </div>
-                          <span className="text-sm font-medium">{avgAttendance}%</span>
-                        </div>
-                      </TableCell>
-                      {monthlyColumnsWithData.map(month => {
+                        </TableCell>
+                      )}
+                      {visibleMonthlyColumns.map(month => {
                         const mKey = month.toLowerCase() + '_attendance';
                         const value = customFields?.[mKey];
                         const numValue = typeof value === 'number' ? value : (value ? parseFloat(String(value)) : 0);
