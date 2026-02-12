@@ -220,7 +220,8 @@ export function CoursesSection({
           const updated = { ...customFields };
           let changed = false;
           customColsToDelete.forEach(colName => {
-            if (colName in updated) { delete updated[colName]; changed = true; }
+            const fieldKey = getCourseFieldKey(courseId, colName);
+            if (fieldKey in updated) { delete updated[fieldKey]; changed = true; }
           });
           if (changed) await onUpdateStudent(student.id, { custom_fields: updated });
         }
@@ -233,21 +234,26 @@ export function CoursesSection({
     setSelectedColumnsToDelete(prev => ({ ...prev, [courseId]: new Set() }));
   };
 
-  const handleUpdateCustomField = async (studentId: string, columnName: string, value: string) => {
+  const getCourseFieldKey = (courseId: string, columnName: string) => `course_${courseId}:${columnName}`;
+
+  const handleUpdateCustomField = async (studentId: string, courseId: string, columnName: string, value: string) => {
     const student = allStudents.find(s => s.id === studentId);
     if (!student) return;
-    const updatedCustomFields = { ...(student.custom_fields || {}), [columnName]: value };
+    const fieldKey = getCourseFieldKey(courseId, columnName);
+    const updatedCustomFields = { ...(student.custom_fields || {}), [fieldKey]: value };
     await onUpdateStudent(studentId, { custom_fields: updatedCustomFields });
   };
 
-  const getSavedColumnsFromData = (students: StudentRecord[]) => {
+  const getSavedColumnsFromData = (courseId: string, students: StudentRecord[]) => {
     const savedCols = new Set<string>();
-    const monthKeys = MONTH_LABELS.map(m => m.toLowerCase() + '_attendance');
+    const prefix = `course_${courseId}:`;
     students.forEach(student => {
       const cf = student.custom_fields as Record<string, unknown> | null;
       if (cf) {
         Object.keys(cf).forEach(key => {
-          if (!monthKeys.includes(key)) savedCols.add(key);
+          if (key.startsWith(prefix)) {
+            savedCols.add(key.slice(prefix.length));
+          }
         });
       }
     });
@@ -287,12 +293,22 @@ export function CoursesSection({
     setEditStudentCourseId(courseId);
     setEditingStudent(student);
     const customFields = student.custom_fields as Record<string, string> | null;
+    // Extract course-specific custom fields (strip prefix for form display)
+    const coursePrefix = `course_${courseId}:`;
+    const courseCustom: Record<string, string> = {};
+    if (customFields) {
+      Object.entries(customFields).forEach(([key, value]) => {
+        if (key.startsWith(coursePrefix)) {
+          courseCustom[key.slice(coursePrefix.length)] = String(value);
+        }
+      });
+    }
     setEditStudentForm({
       name: student.name || '',
       student_id: student.student_id || '',
       email: student.email || '',
       contact: student.contact ? String(student.contact) : '',
-      ...(customFields || {}),
+      ...courseCustom,
     });
   };
 
@@ -308,9 +324,13 @@ export function CoursesSection({
       baseUpdates.contact = contact ? parseInt(contact) : null;
     }
 
-    // Merge custom fields
+    // Merge custom fields with course prefix
     const existingCustom = (editingStudent.custom_fields as Record<string, unknown>) || {};
-    const mergedCustom = { ...existingCustom, ...customFieldUpdates };
+    const prefixedUpdates: Record<string, unknown> = {};
+    Object.entries(customFieldUpdates).forEach(([key, value]) => {
+      prefixedUpdates[getCourseFieldKey(editStudentCourseId, key)] = value;
+    });
+    const mergedCustom = { ...existingCustom, ...prefixedUpdates };
     baseUpdates.custom_fields = mergedCustom;
 
     await onUpdateStudent(editingStudent.id, baseUpdates);
@@ -320,7 +340,7 @@ export function CoursesSection({
 
   const getEditableCustomColumns = (courseId: string, students: StudentRecord[]) => {
     const sessionCols = getCustomColumnsForCourse(courseId).map(c => c.name);
-    const savedCols = getSavedColumnsFromData(students).filter(
+    const savedCols = getSavedColumnsFromData(courseId, students).filter(
       c => !sessionCols.map(s => s.toLowerCase()).includes(c.toLowerCase())
     );
     return [...savedCols, ...sessionCols];
@@ -340,7 +360,7 @@ export function CoursesSection({
         .filter(m => !deletedBaseColumns[courseId]?.has(m + ' Att.'))
         .map(m => m + ' Att.');
       const sessionColNames = getCustomColumnsForCourse(courseId).map(c => c.name);
-      const savedCols = getSavedColumnsFromData(courseStudentRecords).filter(
+      const savedCols = getSavedColumnsFromData(courseId, courseStudentRecords).filter(
         colName => !sessionColNames.map(s => s.toLowerCase()).includes(colName.toLowerCase())
       );
       return [...visibleBase, ...visibleMonthly, ...savedCols, ...sessionColNames];
@@ -446,7 +466,7 @@ export function CoursesSection({
                   ))}
                   {(() => {
                     const sessionColNames = getCustomColumnsForCourse(courseId).map(c => c.name.toLowerCase());
-                    return getSavedColumnsFromData(courseStudentRecords)
+                    return getSavedColumnsFromData(courseId, courseStudentRecords)
                       .filter(colName => !sessionColNames.includes(colName.toLowerCase()))
                       .map(colName => (
                         <TableHead key={colName} className="font-semibold">
@@ -531,17 +551,17 @@ export function CoursesSection({
                       })}
                       {(() => {
                         const sessionColNames = getCustomColumnsForCourse(courseId).map(c => c.name.toLowerCase());
-                        return getSavedColumnsFromData(courseStudentRecords)
+                        return getSavedColumnsFromData(courseId, courseStudentRecords)
                           .filter(colName => !sessionColNames.includes(colName.toLowerCase()))
                           .map(colName => (
                             <TableCell key={colName}>
-                              <Input className="h-8 w-24" defaultValue={(customFields as Record<string, string> | null)?.[colName] || ''} onBlur={(e) => handleUpdateCustomField(student.id, colName, e.target.value)} />
+                              <Input className="h-8 w-24" defaultValue={(customFields as Record<string, string> | null)?.[getCourseFieldKey(courseId, colName)] || ''} onBlur={(e) => handleUpdateCustomField(student.id, courseId, colName, e.target.value)} />
                             </TableCell>
                           ));
                       })()}
                       {getCustomColumnsForCourse(courseId).map(col => (
                         <TableCell key={col.id}>
-                          <Input className="h-8 w-24" defaultValue={(customFields as Record<string, string> | null)?.[col.name] || ''} onBlur={(e) => handleUpdateCustomField(student.id, col.name, e.target.value)} />
+                          <Input className="h-8 w-24" defaultValue={(customFields as Record<string, string> | null)?.[getCourseFieldKey(courseId, col.name)] || ''} onBlur={(e) => handleUpdateCustomField(student.id, courseId, col.name, e.target.value)} />
                         </TableCell>
                       ))}
                       <TableCell className="text-right">
