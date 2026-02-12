@@ -414,8 +414,8 @@ export default function TeacherStudents() {
       const customFields = student.custom_fields as Record<string, unknown> | null;
       if (customFields) {
         Object.keys(customFields).forEach(key => {
-          // Exclude monthly attendance keys
-          if (!monthKeys.includes(key)) {
+          // Exclude monthly attendance keys and course-specific keys
+          if (!monthKeys.includes(key) && !key.startsWith('course_')) {
             savedCols.add(key);
           }
         });
