@@ -16,7 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, BookOpen, Users, X, Check, Columns, UserPlus, UserMinus, Eye, EyeOff } from 'lucide-react';
+import { Plus, Pencil, Trash2, BookOpen, Users, X, Check, Columns, UserPlus, UserMinus, Edit2 } from 'lucide-react';
 import { Course } from '@/hooks/useCourses';
 import { StudentRecord } from '@/hooks/useStudents';
 import { useToast } from '@/hooks/use-toast';
@@ -69,11 +69,16 @@ export function CoursesSection({
   const [newColumnName, setNewColumnName] = useState('');
   const [deleteColumnMode, setDeleteColumnMode] = useState<Record<string, boolean>>({});
   const [selectedColumnsToDelete, setSelectedColumnsToDelete] = useState<Record<string, Set<string>>>({});
-  // Hidden base columns per course
-  const [hiddenBaseColumns, setHiddenBaseColumns] = useState<Record<string, Set<string>>>({});
+  // Permanently deleted base columns per course
+  const [deletedBaseColumns, setDeletedBaseColumns] = useState<Record<string, Set<string>>>({});
+
+  // Edit student row state
+  const [editingStudent, setEditingStudent] = useState<StudentRecord | null>(null);
+  const [editStudentForm, setEditStudentForm] = useState<Record<string, string>>({});
+  const [editStudentCourseId, setEditStudentCourseId] = useState<string>('');
 
   const BASE_COLUMNS = ['Student ID', 'Name', 'Email', 'Contact', 'Attendance'];
-  const isBaseColumnVisible = (courseId: string, col: string) => !(hiddenBaseColumns[courseId]?.has(col));
+  const isBaseColumnVisible = (courseId: string, col: string) => !(deletedBaseColumns[courseId]?.has(col));
 
   const handleOpenAddCourse = () => {
     setEditingCourse(null);
@@ -179,27 +184,26 @@ export function CoursesSection({
     }
 
     // Separate base columns from custom columns
-    const baseColsToHide = new Set<string>();
+    const baseColsToDelete = new Set<string>();
     const customColsToDelete = new Set<string>();
-    const monthlyColsToHide = new Set<string>();
+    const monthlyColsToDelete = new Set<string>();
 
     columnsToDelete.forEach(colName => {
       if (BASE_COLUMNS.includes(colName)) {
-        baseColsToHide.add(colName);
+        baseColsToDelete.add(colName);
       } else if (colName.endsWith(' Att.')) {
-        // Monthly attendance column
-        monthlyColsToHide.add(colName);
+        monthlyColsToDelete.add(colName);
       } else {
         customColsToDelete.add(colName);
       }
     });
 
-    // Hide base columns (just visibility toggle, no data deletion)
-    if (baseColsToHide.size > 0 || monthlyColsToHide.size > 0) {
-      setHiddenBaseColumns(prev => {
+    // Permanently delete base columns from this course's view
+    if (baseColsToDelete.size > 0 || monthlyColsToDelete.size > 0) {
+      setDeletedBaseColumns(prev => {
         const current = new Set(prev[courseId] || []);
-        baseColsToHide.forEach(col => current.add(col));
-        monthlyColsToHide.forEach(col => current.add(col));
+        baseColsToDelete.forEach(col => current.add(col));
+        monthlyColsToDelete.forEach(col => current.add(col));
         return { ...prev, [courseId]: current };
       });
     }
@@ -224,14 +228,9 @@ export function CoursesSection({
     }
 
     const totalRemoved = columnsToDelete.size;
-    toast({ title: 'Columns Removed', description: `${totalRemoved} column(s) removed from view.` });
+    toast({ title: 'Columns Deleted', description: `${totalRemoved} column(s) deleted from this course.` });
     setDeleteColumnMode(prev => ({ ...prev, [courseId]: false }));
     setSelectedColumnsToDelete(prev => ({ ...prev, [courseId]: new Set() }));
-  };
-
-  const handleRestoreColumns = (courseId: string) => {
-    setHiddenBaseColumns(prev => ({ ...prev, [courseId]: new Set() }));
-    toast({ title: 'Columns Restored', description: 'All hidden columns have been restored.' });
   };
 
   const handleUpdateCustomField = async (studentId: string, columnName: string, value: string) => {
@@ -283,21 +282,62 @@ export function CoursesSection({
     return count > 0 ? Math.round(total / count) : 0;
   };
 
+  // Edit student row handlers
+  const handleOpenEditStudent = (courseId: string, student: StudentRecord) => {
+    setEditStudentCourseId(courseId);
+    setEditingStudent(student);
+    const customFields = student.custom_fields as Record<string, string> | null;
+    setEditStudentForm({
+      name: student.name || '',
+      student_id: student.student_id || '',
+      email: student.email || '',
+      contact: student.contact ? String(student.contact) : '',
+      ...(customFields || {}),
+    });
+  };
+
+  const handleSaveEditStudent = async () => {
+    if (!editingStudent) return;
+    const { name, student_id, email, contact, ...customFieldUpdates } = editStudentForm;
+    
+    const baseUpdates: Record<string, any> = {};
+    if (name !== (editingStudent.name || '')) baseUpdates.name = name;
+    if (student_id !== (editingStudent.student_id || '')) baseUpdates.student_id = student_id;
+    if (email !== (editingStudent.email || '')) baseUpdates.email = email;
+    if (contact !== (editingStudent.contact ? String(editingStudent.contact) : '')) {
+      baseUpdates.contact = contact ? parseInt(contact) : null;
+    }
+
+    // Merge custom fields
+    const existingCustom = (editingStudent.custom_fields as Record<string, unknown>) || {};
+    const mergedCustom = { ...existingCustom, ...customFieldUpdates };
+    baseUpdates.custom_fields = mergedCustom;
+
+    await onUpdateStudent(editingStudent.id, baseUpdates);
+    toast({ title: 'Student Updated' });
+    setEditingStudent(null);
+  };
+
+  const getEditableCustomColumns = (courseId: string, students: StudentRecord[]) => {
+    const sessionCols = getCustomColumnsForCourse(courseId).map(c => c.name);
+    const savedCols = getSavedColumnsFromData(students).filter(
+      c => !sessionCols.map(s => s.toLowerCase()).includes(c.toLowerCase())
+    );
+    return [...savedCols, ...sessionCols];
+  };
+
   const renderCourseStudentTable = (courseId: string) => {
     const enrolledStudentIds = getStudentsForCourse(courseId);
     const courseStudentRecords = allStudents.filter(s => enrolledStudentIds.includes(s.id));
     const monthlyColumnsWithData = getMonthlyColumnsWithData(courseStudentRecords);
     const isInDeleteMode = deleteColumnMode[courseId] || false;
     const selectedCols = selectedColumnsToDelete[courseId] || new Set();
-    const visibleMonthlyColumns = monthlyColumnsWithData.filter(m => !hiddenBaseColumns[courseId]?.has(m + ' Att.'));
-    const hasHiddenColumns = (hiddenBaseColumns[courseId]?.size || 0) > 0;
+    const visibleMonthlyColumns = monthlyColumnsWithData.filter(m => !deletedBaseColumns[courseId]?.has(m + ' Att.'));
 
     const getDeletableColumns = () => {
-      // Include visible base columns (except Name which should always stay)
       const visibleBase = BASE_COLUMNS.filter(c => c !== 'Name' && isBaseColumnVisible(courseId, c));
-      // Include visible monthly columns
       const visibleMonthly = monthlyColumnsWithData
-        .filter(m => !hiddenBaseColumns[courseId]?.has(m + ' Att.'))
+        .filter(m => !deletedBaseColumns[courseId]?.has(m + ' Att.'))
         .map(m => m + ' Att.');
       const sessionColNames = getCustomColumnsForCourse(courseId).map(c => c.name);
       const savedCols = getSavedColumnsFromData(courseStudentRecords).filter(
@@ -328,11 +368,6 @@ export function CoursesSection({
                 <Button variant="outline" onClick={() => toggleDeleteColumnMode(courseId)}>
                   <Trash2 className="w-4 h-4 mr-2" />Delete Column
                 </Button>
-                {hasHiddenColumns && (
-                  <Button variant="outline" onClick={() => handleRestoreColumns(courseId)}>
-                    <Eye className="w-4 h-4 mr-2" />Restore Columns
-                  </Button>
-                )}
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline"><Columns className="w-4 h-4 mr-2" />Add Column</Button>
@@ -374,7 +409,9 @@ export function CoursesSection({
                       </div>
                     </TableHead>
                   )}
-                  <TableHead className="font-semibold">Name</TableHead>
+                  {isBaseColumnVisible(courseId, 'Name') && (
+                    <TableHead className="font-semibold">Name</TableHead>
+                  )}
                   {isBaseColumnVisible(courseId, 'Email') && (
                     <TableHead className="font-semibold">
                       <div className="flex items-center gap-2">
@@ -458,7 +495,9 @@ export function CoursesSection({
                       {isBaseColumnVisible(courseId, 'Student ID') && (
                         <TableCell className="font-medium">{student.student_id || '-'}</TableCell>
                       )}
-                      <TableCell>{student.name}</TableCell>
+                      {isBaseColumnVisible(courseId, 'Name') && (
+                        <TableCell>{student.name}</TableCell>
+                      )}
                       {isBaseColumnVisible(courseId, 'Email') && (
                         <TableCell>{student.email || '-'}</TableCell>
                       )}
@@ -506,9 +545,14 @@ export function CoursesSection({
                         </TableCell>
                       ))}
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onRemoveStudentFromCourse(courseId, student.id)}>
-                          <UserMinus className="w-4 h-4 mr-1" />Remove
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => handleOpenEditStudent(courseId, student)} title="Edit student">
+                            <Edit2 className="w-4 h-4 mr-1" />Edit
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => onRemoveStudentFromCourse(courseId, student.id)}>
+                            <UserMinus className="w-4 h-4 mr-1" />Remove
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -525,6 +569,14 @@ export function CoursesSection({
   if (!selectedCourseTab && courses.length > 0) {
     setSelectedCourseTab(courses[0].id);
   }
+
+  // Get custom columns for edit dialog
+  const editCourseStudents = editStudentCourseId
+    ? allStudents.filter(s => getStudentsForCourse(editStudentCourseId).includes(s.id))
+    : [];
+  const editableCustomCols = editStudentCourseId
+    ? getEditableCustomColumns(editStudentCourseId, editCourseStudents)
+    : [];
 
   return (
     <div className="space-y-4">
@@ -646,6 +698,43 @@ export function CoursesSection({
                 })}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Student Dialog */}
+      <Dialog open={!!editingStudent} onOpenChange={(open) => { if (!open) setEditingStudent(null); }}>
+        <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Edit Student</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            <div>
+              <Label>Name</Label>
+              <Input value={editStudentForm.name || ''} onChange={(e) => setEditStudentForm(prev => ({ ...prev, name: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Student ID</Label>
+              <Input value={editStudentForm.student_id || ''} onChange={(e) => setEditStudentForm(prev => ({ ...prev, student_id: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Email</Label>
+              <Input value={editStudentForm.email || ''} onChange={(e) => setEditStudentForm(prev => ({ ...prev, email: e.target.value }))} />
+            </div>
+            <div>
+              <Label>Contact</Label>
+              <Input value={editStudentForm.contact || ''} onChange={(e) => setEditStudentForm(prev => ({ ...prev, contact: e.target.value }))} />
+            </div>
+            {editableCustomCols.map(colName => (
+              <div key={colName}>
+                <Label>{colName}</Label>
+                <Input value={editStudentForm[colName] || ''} onChange={(e) => setEditStudentForm(prev => ({ ...prev, [colName]: e.target.value }))} />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="outline" onClick={() => setEditingStudent(null)}>Cancel</Button>
+            <Button onClick={handleSaveEditStudent}>Save Changes</Button>
           </div>
         </DialogContent>
       </Dialog>
