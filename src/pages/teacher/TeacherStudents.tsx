@@ -62,10 +62,15 @@ export default function TeacherStudents() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
+    const yearParam = searchParams.get('year');
     if (tab === 'courses') {
       setMainTab('courses');
     } else {
       setMainTab('semesters');
+      // If year param is present, switch to that year tab
+      if (yearParam && ['1', '2', '3', '4'].includes(yearParam)) {
+        setSelectedTab(yearParam);
+      }
     }
   }, [searchParams]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -789,6 +794,8 @@ export default function TeacherStudents() {
             onAddStudentToCourse={addStudentToCourse}
             onRemoveStudentFromCourse={removeStudentFromCourse}
             onUpdateStudent={updateStudent}
+            initialCourseId={searchParams.get('course')}
+            initialAction={searchParams.get('action')}
           />
         </TabsContent>
       </Tabs>
