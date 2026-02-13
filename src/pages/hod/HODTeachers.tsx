@@ -47,7 +47,6 @@ export default function HODTeachers() {
       )
     },
     { key: 'email', label: 'Email' },
-    { key: 'student_count', label: 'Students' },
     {
       key: 'actions',
       label: '',
