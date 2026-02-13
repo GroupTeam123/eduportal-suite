@@ -15,7 +15,6 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
-  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -275,15 +274,6 @@ export function DashboardSidebar() {
                       <span className="truncate">{course.name}</span>
                     </button>
                   ))}
-                  <button
-                    onClick={() => {
-                      navigate('/teacher/students?tab=courses&action=add');
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors text-sidebar-primary hover:bg-sidebar-accent/50"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Course</span>
-                  </button>
                 </div>
               )}
             </div>
