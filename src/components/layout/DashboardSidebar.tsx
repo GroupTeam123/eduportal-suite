@@ -13,6 +13,9 @@ import {
   FolderOpen,
   Send,
   BookOpen,
+  ChevronDown,
+  ChevronRight,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,12 +26,16 @@ interface NavItem {
   icon: React.ElementType;
   path: string;
   showBadge?: boolean;
+  expandable?: boolean;
+  expandKey?: string;
 }
+
+const YEAR_LABELS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 
 const teacherNav: NavItem[] = [
   { label: 'Dashboard', icon: BarChart3, path: '/teacher' },
-  { label: 'Students', icon: Users, path: '/teacher/students' },
-  { label: 'Courses', icon: BookOpen, path: '/teacher/students?tab=courses' },
+  { label: 'Students', icon: Users, path: '/teacher/students', expandable: true, expandKey: 'students' },
+  { label: 'Courses', icon: BookOpen, path: '/teacher/students?tab=courses', expandable: true, expandKey: 'courses' },
   { label: 'Reports', icon: FileText, path: '/teacher/reports' },
   { label: 'Submit Report', icon: Send, path: '/teacher/submit' },
   { label: 'About Me', icon: User, path: '/teacher/profile' },
@@ -51,17 +58,56 @@ const principalNav: NavItem[] = [
   { label: 'Reports', icon: FolderOpen, path: '/principal/reports', showBadge: true },
 ];
 
+interface CourseInfo {
+  id: string;
+  name: string;
+}
+
 export function DashboardSidebar() {
-  const { user, logout } = useAuth();
+  const { user, departmentId, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [newReportsCount, setNewReportsCount] = useState(0);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [courses, setCourses] = useState<CourseInfo[]>([]);
 
   const navItems = user?.role === 'teacher' 
     ? teacherNav 
     : user?.role === 'hod' 
     ? hodNav 
     : principalNav;
+
+  // Fetch courses for teacher sidebar
+  useEffect(() => {
+    if (!user || user.role !== 'teacher') return;
+
+    const fetchCourses = async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('courses')
+          .select('id, name')
+          .order('created_at', { ascending: false });
+        if (!error && data) setCourses(data);
+      } catch (err) {
+        console.error('Error fetching courses for sidebar:', err);
+      }
+    };
+
+    fetchCourses();
+
+    const channel = supabase
+      .channel('sidebar-courses')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'courses' }, () => {
+        fetchCourses();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  const toggleSection = (key: string) => {
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // Fetch new reports count for HOD and Principal
   useEffect(() => {
@@ -147,29 +193,102 @@ export function DashboardSidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.map((item) => (
-          <button
-            key={item.path}
-            onClick={() => {
-              const [path, query] = item.path.split('?');
-              navigate(query ? `${path}?${query}` : path);
-            }}
-            className={cn(
-              'nav-link w-full',
-              (item.path.includes('?')
-                ? location.pathname + location.search === item.path
-                : location.pathname === item.path && !location.search) && 'active'
-            )}
-          >
-            <item.icon className="w-5 h-5" />
-            <span className="flex-1 text-left">{item.label}</span>
-            {item.showBadge && newReportsCount > 0 && (
-              <Badge variant="destructive" className="ml-auto text-xs px-2 py-0.5">
-                {newReportsCount}
-              </Badge>
-            )}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const isActive = item.path.includes('?')
+            ? location.pathname + location.search === item.path
+            : location.pathname === item.path && !location.search;
+          const isExpanded = item.expandable && expandedSections[item.expandKey!];
+
+          return (
+            <div key={item.path}>
+              <button
+                onClick={() => {
+                  if (item.expandable) {
+                    toggleSection(item.expandKey!);
+                  }
+                  const [path, query] = item.path.split('?');
+                  navigate(query ? `${path}?${query}` : path);
+                }}
+                className={cn(
+                  'nav-link w-full',
+                  isActive && 'active'
+                )}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.showBadge && newReportsCount > 0 && (
+                  <Badge variant="destructive" className="ml-auto text-xs px-2 py-0.5">
+                    {newReportsCount}
+                  </Badge>
+                )}
+                {item.expandable && (
+                  isExpanded
+                    ? <ChevronDown className="w-4 h-4 text-sidebar-foreground/60" />
+                    : <ChevronRight className="w-4 h-4 text-sidebar-foreground/60" />
+                )}
+              </button>
+
+              {/* Students sub-items: Year 1-4 */}
+              {item.expandKey === 'students' && isExpanded && (
+                <div className="ml-6 mt-1 space-y-0.5">
+                  {YEAR_LABELS.map((label, idx) => {
+                    const yearNum = String(idx + 1);
+                    const isYearActive = location.pathname === '/teacher/students' 
+                      && !location.search
+                      && false; // sub-items just navigate, active highlight handled by parent
+                    return (
+                      <button
+                        key={yearNum}
+                        onClick={() => {
+                          navigate(`/teacher/students?year=${yearNum}`);
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors',
+                          'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50',
+                          location.search === `?year=${yearNum}` && location.pathname === '/teacher/students' && 'text-sidebar-foreground bg-sidebar-accent/50'
+                        )}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-sidebar-foreground/40" />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Courses sub-items: existing courses + Add Course */}
+              {item.expandKey === 'courses' && isExpanded && (
+                <div className="ml-6 mt-1 space-y-0.5">
+                  {courses.map((course) => (
+                    <button
+                      key={course.id}
+                      onClick={() => {
+                        navigate(`/teacher/students?tab=courses&course=${course.id}`);
+                      }}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors truncate',
+                        'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50',
+                        location.search.includes(`course=${course.id}`) && 'text-sidebar-foreground bg-sidebar-accent/50'
+                      )}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-sidebar-foreground/40 shrink-0" />
+                      <span className="truncate">{course.name}</span>
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => {
+                      navigate('/teacher/students?tab=courses&action=add');
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors text-sidebar-primary hover:bg-sidebar-accent/50"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Course</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* User Info & Logout */}

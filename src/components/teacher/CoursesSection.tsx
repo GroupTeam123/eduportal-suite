@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +37,8 @@ interface CoursesSectionProps {
   onAddStudentToCourse: (courseId: string, studentRecordId: string) => Promise<any>;
   onRemoveStudentFromCourse: (courseId: string, studentRecordId: string) => Promise<boolean>;
   onUpdateStudent: (id: string, updates: any) => Promise<any>;
+  initialCourseId?: string | null;
+  initialAction?: string | null;
 }
 
 const MONTH_LABELS = [
@@ -54,6 +56,8 @@ export function CoursesSection({
   onAddStudentToCourse,
   onRemoveStudentFromCourse,
   onUpdateStudent,
+  initialCourseId,
+  initialAction,
 }: CoursesSectionProps) {
   const { toast } = useToast();
   const [isCourseDialogOpen, setIsCourseDialogOpen] = useState(false);
@@ -79,6 +83,18 @@ export function CoursesSection({
 
   const BASE_COLUMNS = ['Student ID', 'Name', 'Email', 'Contact', 'Attendance'];
   const isBaseColumnVisible = (courseId: string, col: string) => !(deletedBaseColumns[courseId]?.has(col));
+
+  // Handle initial course/action from sidebar navigation
+  useEffect(() => {
+    if (initialAction === 'add') {
+      handleOpenAddCourse();
+    } else if (initialCourseId && courses.length > 0) {
+      const courseExists = courses.find(c => c.id === initialCourseId);
+      if (courseExists) {
+        setSelectedCourseTab(initialCourseId);
+      }
+    }
+  }, [initialCourseId, initialAction, courses]);
 
   const handleOpenAddCourse = () => {
     setEditingCourse(null);
